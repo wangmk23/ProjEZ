@@ -12,7 +12,7 @@
   <p><a href="https://github.com/wangmk23/ProjEZ/releases">下载</a> · <a href="#开始使用">开始使用</a> · <a href="docs/BUILD.md">构建</a> · <a href="docs/FAQ.md">常见问题</a> · <a href="README.en.md">English</a></p>
 </div>
 
-> **AI 编制声明**：本产品由 AI 编制，功能与改进方向来自使用者的需求、测试和反馈。
+> **AI 编制声明**：本产品由 AI 开发，功能与改进方向来自使用者的需求、测试和反馈。
 
 ---
 
