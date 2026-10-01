@@ -6,6 +6,8 @@
 <p><a href="README.md">中文</a> · <a href="https://github.com/wangmk23/ProjEZ/releases">Downloads</a> · <a href="docs/BUILD.md">Build instructions</a></p>
 </div>
 
+> **AI development disclosure:** This product was developed by AI, with its features and improvements guided by user requirements, testing, and feedback.
+
 ProjEZ mirrors your primary display or captures one application onto an extended display. Freeze the audience's frame while using other software on your control display, then resume. A black-screen action temporarily hides the output.
 
 <img src="docs/images/projection.png" alt="Projection controls in an empty demonstration state">

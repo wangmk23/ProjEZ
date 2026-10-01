@@ -26,6 +26,8 @@ try {
 
 Windows 10 1903+ / Windows 11 x64 便携版。解压后运行 ProjEZ.exe。
 
+本产品由 AI 编制，功能与改进方向来自使用者的需求、测试和反馈。
+
 1. 连接投影仪，Windows 选择“扩展”，将操作屏设为主屏。
 2. 在程序中选择来源和观众屏幕，或选择应用窗口，再开始投影。
 3. 冻结后主屏可以继续操作；需要隐藏内容时使用黑屏。
@@ -43,6 +45,8 @@ Windows 10 1903+ / Windows 11 x64 便携版。解压后运行 ProjEZ.exe。
     [IO.File]::WriteAllText((Join-Path $packageDir 'README.md'), $readme, [Text.UTF8Encoding]::new($false))
     $guide = @"
 ProjEZ $Version / Windows x64
+
+This product was developed by AI, with its features and improvements guided by user requirements, testing, and feedback.
 
 Run ProjEZ.exe. Set Windows displays to Extend, then select the source and audience screen.
 Freeze: Ctrl+Alt+F8 | Resume: Ctrl+Alt+F9 | Black: Ctrl+Alt+F10 | Stop: Ctrl+Alt+F12

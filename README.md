@@ -12,6 +12,8 @@
   <p><a href="https://github.com/wangmk23/ProjEZ/releases">下载</a> · <a href="#开始使用">开始使用</a> · <a href="docs/BUILD.md">构建</a> · <a href="docs/FAQ.md">常见问题</a> · <a href="README.en.md">English</a></p>
 </div>
 
+> **AI 编制声明**：本产品由 AI 编制，功能与改进方向来自使用者的需求、测试和反馈。
+
 ---
 
 演示时，先让观众看到主屏或选定应用。需要找文件、切换软件时，冻结观众画面，本机继续操作；准备好后恢复同步。需要临时隐藏内容时，直接黑屏。
