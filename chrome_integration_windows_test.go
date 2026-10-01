@@ -167,8 +167,8 @@ func TestChromeRenderHelper(t *testing.T) {
 	dc, _, _ = procGetDC.Call(hwndMain)
 	paintMainWindow(hwndMain, dc)
 	procReleaseDC.Call(hwndMain, dc)
-	a, _, _ := gdi32.NewProc("GetPixel").Call(mainBuffer.dc, 1048, 5)
-	b, _, _ := gdi32.NewProc("GetPixel").Call(mainBuffer.dc, 900, 5)
+	a, _, _ := gdi32.NewProc("GetPixel").Call(mainBuffer.dc, uintptr(px(logicalWidth-72)), uintptr(px(5)))
+	b, _, _ := gdi32.NewProc("GetPixel").Call(mainBuffer.dc, uintptr(px(logicalWidth-220)), uintptr(px(5)))
 	if a != b {
 		t.Fatalf("scrolled switch painted over titlebar: %x vs %x", a, b)
 	}
@@ -176,16 +176,16 @@ func TestChromeRenderHelper(t *testing.T) {
 	dc, _, _ = procGetDC.Call(hwndMain)
 	paintMainWindow(hwndMain, dc)
 	procReleaseDC.Call(hwndMain, dc)
-	updateHover(POINT{1050, 392})
+	updateHover(POINT{logicalWidth - 70, 392})
 	if lastHoverID == 0 {
 		t.Fatal("toggle hover target missing")
 	}
 	user32.NewProc("ValidateRect").Call(hwndMain, 0)
-	updateHover(POINT{1051, 393})
+	updateHover(POINT{logicalWidth - 69, 393})
 	if pending, _, _ := user32.NewProc("GetUpdateRect").Call(hwndMain, 0, 0); pending != 0 {
 		t.Fatal("same-button mouse movement still invalidates the window")
 	}
-	updateHover(POINT{800, 550})
+	updateHover(POINT{logicalWidth - 320, 550})
 	if pending, _, _ := user32.NewProc("GetUpdateRect").Call(hwndMain, 0, 0); pending == 0 {
 		t.Fatal("button leave failed to invalidate")
 	}
