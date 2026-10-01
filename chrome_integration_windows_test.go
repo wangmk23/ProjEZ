@@ -128,6 +128,10 @@ func TestChromeRenderHelper(t *testing.T) {
 		pageScroll = 0
 		procSetWindowPos.Call(hwndMain, 0, 0, 0, uintptr(px(1120)), uintptr(px(820)), SWP_NOZORDER|SWP_NOACTIVATE|2)
 		layoutControls(hwndMain)
+		// Native windows cannot exceed the runner's work area. Keep the switch
+		// visible when high DPI makes the logical viewport shorter than 820.
+		pageScroll = max(int32(0), 420-(footerTop()-8))
+		layoutControls(hwndMain)
 		procShowWindow.Call(hwndMain, 4)
 		procUpdateWindow.Call(hwndMain)
 		if dir := os.Getenv("PROJEZ_SCREENSHOTS"); dir != "" {
@@ -139,7 +143,7 @@ func TestChromeRenderHelper(t *testing.T) {
 		dc, _, _ := procGetDC.Call(hwndMain)
 		paintMainWindow(hwndMain, dc)
 		procReleaseDC.Call(hwndMain, dc)
-		color, _, _ := gdi32.NewProc("GetPixel").Call(mainBuffer.dc, uintptr(px(logicalWidth-72)), uintptr(px(392)))
+		color, _, _ := gdi32.NewProc("GetPixel").Call(mainBuffer.dc, uintptr(px(logicalWidth-72)), uintptr(px(392-pageScroll)))
 		if uint32(color) != rgb(66, 66, 66) {
 			t.Fatalf("DPI %d switch missing/misplaced: %x", dpi, color)
 		}
@@ -147,7 +151,7 @@ func TestChromeRenderHelper(t *testing.T) {
 		var edit RECT
 		user32.NewProc("GetWindowRect").Call(searchEdit, uintptr(unsafe.Pointer(&edit)))
 		user32.NewProc("MapWindowPoints").Call(0, hwndMain, uintptr(unsafe.Pointer(&edit)), 2)
-		expected := searchBounds(1120)
+		expected := searchBounds(logicalWidth)
 		if edit.Left != px(expected.Left+14) || edit.Top != px(14) {
 			t.Fatalf("DPI %d search misplaced %+v", dpi, edit)
 		}
