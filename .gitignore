@@ -1,0 +1,23 @@
+# Build outputs and local state
+/dist/
+*.exe
+*.test
+*.log
+*.tmp
+*.zip
+*.bundle
+*.ini
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+/screenshots/
+/coverage.out
+/coverage.html
+/.vscode/
+/.idea/
+.DS_Store
+Thumbs.db
