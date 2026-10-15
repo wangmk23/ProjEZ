@@ -10,7 +10,7 @@ go vet ./...
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-脚本会生成 `dist/v0.7.7/ProjEZ.exe`、便携 ZIP 和 SHA256 校验文件。这里的 ExecutionPolicy Bypass 只作用于该次脚本进程；不修改系统执行策略。也可以直接运行以下命令：
+脚本会生成 `dist/v0.7.8/ProjEZ.exe`、便携 ZIP 和 SHA256 校验文件。这里的 ExecutionPolicy Bypass 只作用于该次脚本进程；不修改系统执行策略。也可以直接运行以下命令：
 
 ```powershell
 go build -trimpath -ldflags="-H=windowsgui -s -w" -o ProjEZ.exe .

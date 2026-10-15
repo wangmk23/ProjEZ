@@ -540,6 +540,7 @@ func openLocation(target string) {
 }
 
 func resetHotkeys() {
+	user32.NewProc("SetFocus").Call(hwndMain)
 	loadingSettings = true
 	setText(editFreeze, "Ctrl+Alt+F8")
 	setText(editResume, "Ctrl+Alt+F9")
@@ -647,7 +648,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 	procFillRect.Call(hdc, uintptr(unsafe.Pointer(&RECT{0, titleHeight, 220 - shift, h})), brushSidebar)
 	drawChrome(hdc, w)
 	if shift == 0 {
-		textLine(hdc, "v0.7.7", RECT{24, h - 40, 212, h - 12}, fontSmall, true)
+		textLine(hdc, "v0.7.8", RECT{24, h - 40, 212, h - 12}, fontSmall, true)
 	}
 	icons := []string{"\uE80F", "\uE7F4", "\uE765", "\uE7F8", "\uE790", "\uE713", "\uE946"}
 	for i, name := range pageNames {
@@ -698,18 +699,20 @@ func drawMainUI(hdc uintptr, client RECT) {
 		focus, _, _ := user32.NewProc("GetFocus").Call()
 		for i, edit := range []uintptr{editFreeze, editResume, editBlack, editStop} {
 			top := int32(158 + i*80)
-			desc := "未启用：保存检查或换一个组合键"
-			if actionHotkeyOK[i] {
-				desc = "已启用"
-			}
-			edited, err := parseHotkey(getText(edit))
-			if err != nil || edited.Mods != appliedActionKeys[i].Mods || edited.VK != appliedActionKeys[i].VK {
-				desc = "修改后请保存检查"
-			}
-			if recordingEdit == edit {
+			desc, warning := actionHotkeyHint(i, actionHotkeyTexts())
+			if recordingEdit == edit && !warning {
 				desc = "请按下组合键，Esc 取消"
 			}
 			settingCard(hdc, right, top, actionHotkeyNames[i]+"快捷键", desc, true)
+			if warning {
+				warningRect := RECT{264, top + 36, right - 374, top + 60}
+				procFillRect.Call(hdc, uintptr(unsafe.Pointer(&warningRect)), brushCard)
+				color := rgb(251, 191, 36)
+				if preferences.LightTheme {
+					color = rgb(160, 72, 0)
+				}
+				drawText(hdc, desc, warningRect, fontDesc, color, DT_VCENTER|DT_SINGLELINE|0x8000)
+			}
 			border := penBorder
 			if focus == edit {
 				border = penAccent
@@ -746,7 +749,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 		uiToggle(hdc, RECT{right - 76, 503, right - 28, 529}, preferences.Compatibility, func() { preferences.Compatibility = !preferences.Compatibility; saveConfig() })
 		drawPrivacyControls(hdc, right)
 	case 6:
-		settingCard(hdc, right, 158, "ProjEZ", "v0.7.7", false)
+		settingCard(hdc, right, 158, "ProjEZ", "v0.7.8", false)
 		textLine(hdc, "Windows 投影控制", RECT{264, 250, right - 20, 282}, fontDesc, true)
 		textLine(hdc, "窗口投影、冻结画面与临时黑屏", RECT{264, 286, right - 20, 318}, fontDesc, true)
 		uiButton(hdc, RECT{264, 350, 410, 388}, "使用说明", false, true, showUsageGuide)

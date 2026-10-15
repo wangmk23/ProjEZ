@@ -1132,13 +1132,16 @@ func releaseFrame() {
 }
 
 func applyHotkeys(showResult bool) {
+	if showResult && recordingEdit != 0 {
+		user32.NewProc("SetFocus").Call(hwndMain)
+	}
 	registerReleaseCursorHotkey()
-	texts := []string{getText(editFreeze), getText(editResume), getText(editBlack), getText(editStop)}
+	texts := actionHotkeyTexts()
 	keys, err := validateActionHotkeys(texts)
 	if err != nil {
-		setStatus(err.Error())
+		setStatus("快捷键未保存：" + err.Error())
 		if showResult {
-			messageBox(hwndMain, err.Error(), "快捷键设置", MB_ICONWARNING)
+			messageBox(hwndMain, statusText, "快捷键设置", MB_ICONWARNING)
 		}
 		return
 	}
@@ -1153,18 +1156,22 @@ func applyHotkeys(showResult bool) {
 		actionHotkeyOK[i] = ok
 		appliedActionKeys[i] = key
 		if !ok {
-			failures = append(failures, actionHotkeyNames[i]+"：注册失败或被占用")
+			failures = append(failures, actionHotkeyRegistrationMessage(i, texts[i]))
 		}
 	}
 	blackHotkeyOK = actionHotkeyOK[2]
 	currentFreeze, currentResume = keys[0], keys[1]
 	if len(failures) > 0 {
-		setStatus(strings.Join(failures, "；"))
+		setStatus("快捷键未保存：" + strings.Join(failures, "；"))
 	} else {
 		setStatus("四项快捷键已启用")
 	}
 	if showResult {
-		messageBox(hwndMain, statusText, "快捷键设置", MB_ICONINFORMATION)
+		icon := uintptr(MB_ICONINFORMATION)
+		if len(failures) > 0 {
+			icon = MB_ICONWARNING
+		}
+		messageBox(hwndMain, statusText, "快捷键设置", icon)
 	}
 	procInvalidateRect.Call(hwndMain, 0, 0)
 }
@@ -1308,6 +1315,7 @@ func loadConfigIntoUI() {
 			}
 		}
 	}
+	savedActionHotkeyTexts = [4]string{cfg.FreezeHotkey, cfg.ResumeHotkey, cfg.BlackHotkey, cfg.StopHotkey}
 	setText(editFreeze, cfg.FreezeHotkey)
 	setText(editResume, cfg.ResumeHotkey)
 	setText(editBlack, cfg.BlackHotkey)
@@ -1323,18 +1331,21 @@ func loadConfigIntoUI() {
 }
 
 func saveConfig() {
+	shortcutTexts := hotkeyTextsForSave(actionHotkeyTexts())
 	lines := []string{
 		"SourceDevice=" + selectedDevice(cbSource),
 		"OutputDevice=" + selectedDevice(cbOutput),
-		"FreezeHotkey=" + getText(editFreeze),
-		"ResumeHotkey=" + getText(editResume),
-		"BlackHotkey=" + getText(editBlack),
-		"StopHotkey=" + getText(editStop),
+		"FreezeHotkey=" + shortcutTexts[0],
+		"ResumeHotkey=" + shortcutTexts[1],
+		"BlackHotkey=" + shortcutTexts[2],
+		"StopHotkey=" + shortcutTexts[3],
 		fmt.Sprintf("ShowCursor=%t", showCursor),
 	}
 	lines = append(lines, preferenceLines(preferences)...)
 	if err := os.WriteFile(configPath(), []byte(strings.Join(lines, "\r\n")+"\r\n"), 0644); err != nil {
 		setStatus("设置保存失败：" + err.Error())
+	} else {
+		savedActionHotkeyTexts = shortcutTexts
 	}
 }
 

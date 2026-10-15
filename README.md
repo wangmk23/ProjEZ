@@ -6,7 +6,7 @@
   <p>
     <img alt="Windows 10 1903+ / 11" src="https://img.shields.io/badge/Windows-10%201903%2B%20%7C%2011-0078D4?style=flat-square">
     <img alt="x64" src="https://img.shields.io/badge/architecture-x64-475569?style=flat-square">
-    <img alt="Version 0.7.7" src="https://img.shields.io/badge/version-0.7.7-2563EB?style=flat-square">
+    <img alt="Version 0.7.8" src="https://img.shields.io/badge/version-0.7.8-2563EB?style=flat-square">
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-16A34A?style=flat-square"></a>
   </p>
   <p><a href="https://github.com/wangmk23/ProjEZ/releases">下载</a> · <a href="#开始使用">开始使用</a> · <a href="docs/BUILD.md">构建</a> · <a href="docs/FAQ.md">常见问题</a> · <a href="README.en.md">English</a></p>
@@ -52,6 +52,8 @@
 | 释放鼠标 | `Ctrl + Alt + F11` |
 
 前四项可修改：点击快捷键框，直接按组合键，再保存检查。`Esc` 取消本次录制。录制期间暂停 ProjEZ 自己的全局快捷键，避免误触投影操作。运行新版前请退出旧实例，以免占用组合键。
+
+出现冲突时，设置页会标明重复或被占用的快捷键；点击保存可查看具体动作、组合键和处理建议。未通过检测的快捷键不会覆盖已保存的配置。
 
 <details>
 <summary>查看快捷键页面</summary>

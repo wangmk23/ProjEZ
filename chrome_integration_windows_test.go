@@ -328,6 +328,24 @@ func TestChromeRenderHelper(t *testing.T) {
 		if e := saveChromeWindow(hwndMain, filepath.Join(dir, "hotkeys.png")); e != nil {
 			t.Fatal(e)
 		}
+		// Synthetic conflict states: never occupy a user's real shortcut for screenshots.
+		texts := []string{"Ctrl+Alt+F8", "Ctrl+Alt+F9", "Ctrl+Alt+F10", "Ctrl+Alt+F12"}
+		keys, _ := validateActionHotkeys(texts)
+		copy(appliedActionKeys[:], keys)
+		actionHotkeyOK = [4]bool{false, true, true, true}
+		actionHotkeyErrors[0] = 1409
+		setStatus(actionHotkeyRegistrationMessage(0, texts[0]))
+		setText(editFreeze, texts[0])
+		setText(editResume, texts[1])
+		setText(editBlack, texts[2])
+		setText(editStop, texts[3])
+		for _, light := range []bool{false, true} {
+			preferences.LightTheme = light
+			applyPalette()
+			if e := saveChromeWindow(hwndMain, filepath.Join(dir, fmt.Sprintf("hotkey-conflict-light-%t.png", light))); e != nil {
+				t.Fatal(e)
+			}
+		}
 	}
 }
 
