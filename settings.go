@@ -648,7 +648,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 	procFillRect.Call(hdc, uintptr(unsafe.Pointer(&RECT{0, titleHeight, 220 - shift, h})), brushSidebar)
 	drawChrome(hdc, w)
 	if shift == 0 {
-		textLine(hdc, "v0.7.8", RECT{24, h - 40, 212, h - 12}, fontSmall, true)
+		textLine(hdc, "v0.7.9", RECT{24, h - 40, 212, h - 12}, fontSmall, true)
 	}
 	icons := []string{"\uE80F", "\uE7F4", "\uE765", "\uE7F8", "\uE790", "\uE713", "\uE946"}
 	for i, name := range pageNames {
@@ -749,7 +749,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 		uiToggle(hdc, RECT{right - 76, 503, right - 28, 529}, preferences.Compatibility, func() { preferences.Compatibility = !preferences.Compatibility; saveConfig() })
 		drawPrivacyControls(hdc, right)
 	case 6:
-		settingCard(hdc, right, 158, "ProjEZ", "v0.7.8", false)
+		settingCard(hdc, right, 158, "ProjEZ", "v0.7.9", false)
 		textLine(hdc, "Windows 投影控制", RECT{264, 250, right - 20, 282}, fontDesc, true)
 		textLine(hdc, "窗口投影、冻结画面与临时黑屏", RECT{264, 286, right - 20, 318}, fontDesc, true)
 		uiButton(hdc, RECT{264, 350, 410, 388}, "使用说明", false, true, showUsageGuide)

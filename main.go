@@ -876,9 +876,9 @@ func startOutput() {
 		messageBox(hwndMain, "无法创建投影输出窗口。", "启动失败", MB_ICONERROR)
 		return
 	}
-	if !preserveTaskbarControls(hwndOutput) {
+	if err := configureProjectionTaskbar(hwndOutput); err != nil {
 		stopOutput()
-		setStatus("无法保护主屏任务栏，投影未启动")
+		setStatus("无法设置投影全屏输出：" + err.Error())
 		return
 	}
 	procSetWindowPos.Call(hwndOutput, HWND_TOPMOST, uintptr(int64(dstMonitor.Rect.Left)), uintptr(int64(dstMonitor.Rect.Top)), uintptr(w), uintptr(h), SWP_NOACTIVATE|SWP_SHOWWINDOW)
@@ -978,6 +978,7 @@ func stopOutput() {
 	stopFramePump()
 	if hwndOutput != 0 {
 		procKillTimer.Call(hwndOutput, TIMER_LIVE)
+		_ = markProjectionFullscreen(hwndOutput, false)
 		procDestroyWindow.Call(hwndOutput)
 		hwndOutput = 0
 	}
