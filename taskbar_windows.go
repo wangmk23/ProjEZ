@@ -9,11 +9,21 @@ import (
 	"unsafe"
 )
 
+var setProjectionDWMAttribute = func(hwnd uintptr, attribute uint32, value int32) error {
+	hr, _, _ := procDwmSetWindowAttribute.Call(hwnd, uintptr(attribute), uintptr(unsafe.Pointer(&value)), unsafe.Sizeof(value))
+	return hrError("DwmSetWindowAttribute", hr)
+}
+
 // The control window opts out of fullscreen, but the audience window must
 // be fullscreen so the target screen's native taskbar does not overlay it.
 func configureProjectionTaskbar(hwnd uintptr) error {
 	if hwnd == 0 {
 		return fmt.Errorf("invalid projection window")
+	}
+	// Taskbar live previews must not make a frozen/black output transparent.
+	// Attribute 12 is DWMWA_EXCLUDED_FROM_PEEK; it affects only this window.
+	if err := setProjectionDWMAttribute(hwnd, 12, 1); err != nil {
+		return err
 	}
 	user32.NewProc("RemovePropW").Call(hwnd, uintptr(unsafe.Pointer(utf16Ptr("NonRudeHWND"))))
 	return markProjectionFullscreen(hwnd, true)

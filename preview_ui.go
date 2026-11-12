@@ -147,6 +147,11 @@ func previewCurrent() bool {
 	}
 	return audienceFrame.State == confirmedOutputState()
 }
+
+// A readback error must not erase an already confirmed frame. State and
+// generation checks still hide stale content after freeze/black/stop changes.
+func previewImageAvailable() bool { return previewWanted && previewCurrent() }
+
 func previewRoute() string {
 	a, b := selectedDevice(cbSource), selectedDevice(cbOutput)
 	if outputRunning {
@@ -198,14 +203,12 @@ func drawAudiencePreview(dc uintptr, right, top int32) {
 	r := RECT{264, top + 36, 264 + w, top + 36 + h}
 	black, _, _ := procGetStockObject.Call(4)
 	procFillRect.Call(dc, uintptr(unsafe.Pointer(&r)), black)
-	current := previewCurrent()
+	current := previewImageAvailable()
 	label := "等待输出"
 	if !outputRunning {
 		label = "尚未开始投影"
 	} else if !previewWanted {
 		label = "预览已关闭"
-	} else if audienceError != "" {
-		label = audienceError
 	} else if current {
 		header := previewHeader()
 		gdi32.NewProc("StretchDIBits").Call(dc, uintptr(r.Left), uintptr(r.Top), uintptr(w), uintptr(h), 0, 0, previewW, previewH, uintptr(unsafe.Pointer(&audienceFrame.Pixels[0])), uintptr(unsafe.Pointer(&header)), 0, SRCCOPY)
@@ -217,11 +220,15 @@ func drawAudiencePreview(dc uintptr, right, top int32) {
 		default:
 			label = "实时预览"
 		}
-		if time.Since(audienceFrame.At) > time.Second {
+		if audienceError != "" {
+			label = "预览暂未更新"
+		} else if time.Since(audienceFrame.At) > time.Second && audienceFrame.State == projectionLive {
 			label = "预览可能延迟"
 		}
+	} else if audienceError != "" {
+		label = audienceError
 	}
-	if current && previewWanted && audienceError == "" {
+	if current {
 		badge := RECT{r.Right - 130, r.Top + 8, r.Right - 8, r.Top + 34}
 		drawRounded(dc, badge, 5, brushControl, 0)
 		textLine(dc, label, badge, fontSmall, false)

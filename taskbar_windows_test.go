@@ -28,11 +28,28 @@ func TestProjectionAndControlTaskbarPolicies(t *testing.T) {
 	if !preserveTaskbarControls(control) || !preserveTaskbarControls(output) {
 		t.Fatal("set baseline protection")
 	}
+	oldDWM := setProjectionDWMAttribute
+	excluded := false
+	setProjectionDWMAttribute = func(h uintptr, attribute uint32, value int32) error {
+		if h != output {
+			t.Fatal("modified unrelated window Peek policy")
+		}
+		err := oldDWM(h, attribute, value)
+		if attribute == 12 && value == 1 && err == nil {
+			excluded = true
+		}
+		return err
+	}
+	defer func() { setProjectionDWMAttribute = oldDWM }()
 	// An output window must not inherit the control window's opt-out from fullscreen.
 	if err := configureProjectionTaskbar(output); err != nil {
 		t.Fatal(err)
 	}
 	defer markProjectionFullscreen(output, false)
+	if !excluded {
+		t.Fatal("projection did not opt out of taskbar Peek transparency")
+	}
+
 	if v, _, _ := getProp.Call(output, prop); v != 0 {
 		t.Fatal("projection still forces native taskbar above captured taskbar")
 	}

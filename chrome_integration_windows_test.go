@@ -347,6 +347,44 @@ func TestChromeRenderHelper(t *testing.T) {
 			}
 		}
 	}
+	// Pixel regression: a transient preview readback error must not flash black.
+	func() {
+		oldRunning, oldGPU, oldWanted, oldFrame, oldError, oldEvent, oldController, oldPage := outputRunning, gpuOwnsOutput, previewWanted, audienceFrame, audienceError, gpuLastEvent, gpuController, currentPage
+		defer func() {
+			outputRunning, gpuOwnsOutput, previewWanted, audienceFrame, audienceError, gpuLastEvent, gpuController, currentPage = oldRunning, oldGPU, oldWanted, oldFrame, oldError, oldEvent, oldController, oldPage
+		}()
+		outputRunning, gpuOwnsOutput, previewWanted = true, true, true
+		currentPage, pageScroll = 0, 0
+		gpuController.generation, gpuController.sequence = 17, 3
+		gpuLastEvent = projectionEvent{State: projectionFrozen}
+		pixels := make([]byte, previewW*previewH*4)
+		for i := 0; i < len(pixels); i += 4 {
+			pixels[i], pixels[i+1], pixels[i+2], pixels[i+3] = 20, 70, 160, 255
+		}
+		audienceFrame = previewFrame{Generation: 17, Sequence: 3, State: projectionFrozen, Pixels: pixels}
+		sample := func() uintptr {
+			dc, _, _ := procGetDC.Call(hwndMain)
+			paintMainWindow(hwndMain, dc)
+			procReleaseDC.Call(hwndMain, dc)
+			v, _, _ := gdi32.NewProc("GetPixel").Call(mainBuffer.dc, uintptr(px(300)), uintptr(px(330)))
+			return v
+		}
+		audienceError = ""
+		first := sample()
+		if first != uintptr(rgb(160, 70, 20)) {
+			t.Fatalf("preview fixture not drawn: %x", first)
+		}
+		audienceError = "预览读回超时"
+		if got := sample(); got != first {
+			t.Fatalf("transient preview error blanked confirmed image: %x vs %x", got, first)
+		}
+		gpuController.sequence = 4
+		gpuLastEvent.State = projectionBlack
+		if got := sample(); got == first {
+			t.Fatal("old preview remained visible after black command")
+		}
+	}()
+
 }
 
 func TestChromeNativeLifecycleAndDPI(t *testing.T) {
