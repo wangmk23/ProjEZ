@@ -345,6 +345,7 @@ func main() {
 		return
 	}
 	preserveTaskbarControls(hwndMain)
+	probeControlCaptureExclusion()
 	applyWindowEffects(hwndMain)
 	refreshMonitors()
 	loadConfigIntoUI()
@@ -467,6 +468,9 @@ func applyWindowEffects(hwnd uintptr) {
 }
 
 func mainWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
+	if trayWindowMessage(msg, wParam, lParam) {
+		return 0
+	}
 	if result, handled := chromeMessage(hwnd, msg, wParam, lParam); handled {
 		return result
 	}
@@ -480,6 +484,7 @@ func mainWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 			return 0
 		}
 		if wParam == previewTimer {
+			finishTrayRestore()
 			maintainCursorControl()
 			pollAudiencePreview()
 			return 0
@@ -613,14 +618,10 @@ func mainWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		procEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
 		return 0
 	case WM_CLOSE:
-		if gpuActive != nil {
-			closingMain = true
-			stopOutput()
-			return 0
-		}
-		procDestroyWindow.Call(hwnd)
+		handleMainClose()
 		return 0
 	case WM_DESTROY:
+		removeTray()
 		procPostQuitMessage.Call(0)
 		return 0
 	}
@@ -855,6 +856,9 @@ func startOutput() {
 		setStatus("原刷新率未能恢复，请先在 Windows 显示设置中检查")
 		return
 	}
+	if !preferences.WindowMode && !ensureControlCapturePolicy() {
+		return
+	}
 	activeSourceWindow = selectedWindow
 	srcMonitor = monitors[si]
 	dstMonitor = monitors[di]
@@ -872,6 +876,7 @@ func startOutput() {
 		0, 0, hInstance, 0,
 	)
 	if hwndOutput == 0 {
+		clearControlCaptureExclusion()
 		restoreRefreshRate()
 		messageBox(hwndMain, "无法创建投影输出窗口。", "启动失败", MB_ICONERROR)
 		return
@@ -936,6 +941,9 @@ func resumeOutput() {
 		setStatus("窗口投影已暂停，请停止后重新开始")
 		return
 	}
+	if outputRunning && activeSourceWindow.HWND == 0 && !ensureControlCapturePolicy() {
+		return
+	}
 	if !privacyResumeAllowed() {
 		return
 	}
@@ -982,6 +990,7 @@ func stopOutput() {
 		procDestroyWindow.Call(hwndOutput)
 		hwndOutput = 0
 	}
+	clearControlCaptureExclusion()
 	resetAudiencePreview()
 	outputRunning = false
 	activeSourceWindow = sourceWindow{}
@@ -1244,6 +1253,7 @@ func keyToVK(t string) (uint32, bool) {
 }
 
 func cleanup() {
+	removeTray()
 	releaseCursorControl()
 	procUnregisterHotKey.Call(hwndMain, hotkeyReleaseCursor)
 	setPrivacyEnabled(false)

@@ -48,6 +48,9 @@ func contentShift() int32 {
 func footerTop() int32 { return logicalHeight - 84 }
 func maxPageScroll() int32 {
 	bottom := int32(562)
+	if currentPage == 4 {
+		bottom = 610
+	}
 	if currentPage == 5 {
 		bottom = 806
 	}

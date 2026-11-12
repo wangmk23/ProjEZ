@@ -31,6 +31,7 @@ type Preferences struct {
 	WindowMode     bool
 	FreeCursor     bool
 	LightTheme     bool
+	CloseToTray    bool
 }
 
 var preferences = Preferences{FPS: 0}
@@ -48,7 +49,7 @@ var pageKeywords = []string{
 	"投影 镜像 来源 目标 冻结 恢复 停止 屏幕 显示器",
 	"快捷键 热键 按键 冲突 F8 F9",
 	"显示 比例 缩放 铺满 帧率 刷新 鼠标 光标 FPS 清晰 平滑 画质 分辨率",
-	"外观 主题 强调色 颜色 透明 深色",
+	"外观 主题 强调色 颜色 透明 深色 关闭 托盘 退出",
 	"高级 配置 目录 默认 重置 设置文件 隐私 保护 黑屏 演示窗口",
 	"关于 版本 说明 操作 帮助",
 }
@@ -180,6 +181,8 @@ func parsePreferences(text string) Preferences {
 		}
 		v := strings.TrimSpace(kv[1])
 		switch strings.ToLower(strings.TrimSpace(kv[0])) {
+		case "closetotray":
+			p.CloseToTray = strings.EqualFold(v, "true")
 		case "lighttheme":
 			p.LightTheme = strings.EqualFold(v, "true")
 		case "windowmode":
@@ -223,7 +226,7 @@ func preferenceLines(p Preferences) []string {
 	if p.Compatibility {
 		backend = "gdi"
 	}
-	return []string{fmt.Sprintf("LightTheme=%t", p.LightTheme), fmt.Sprintf("WindowMode=%t", p.WindowMode), fmt.Sprintf("FreeCursor=%t", p.FreeCursor), fmt.Sprintf("PreviewEconomy=%t", p.PreviewEconomy), "Backend=" + backend, "RefreshPolicy=2", fmt.Sprintf("FPS=%d", p.FPS), fmt.Sprintf("Fill=%t", p.Fill), fmt.Sprintf("Transparent=%t", p.Transparent), fmt.Sprintf("Accent=%d", p.Accent), fmt.Sprintf("Smooth=%t", p.Smooth)}
+	return []string{fmt.Sprintf("CloseToTray=%t", p.CloseToTray), fmt.Sprintf("LightTheme=%t", p.LightTheme), fmt.Sprintf("WindowMode=%t", p.WindowMode), fmt.Sprintf("FreeCursor=%t", p.FreeCursor), fmt.Sprintf("PreviewEconomy=%t", p.PreviewEconomy), "Backend=" + backend, "RefreshPolicy=2", fmt.Sprintf("FPS=%d", p.FPS), fmt.Sprintf("Fill=%t", p.Fill), fmt.Sprintf("Transparent=%t", p.Transparent), fmt.Sprintf("Accent=%d", p.Accent), fmt.Sprintf("Smooth=%t", p.Smooth)}
 }
 
 func outputSize(sw, sh, dw, dh int32, fill bool) (int32, int32) {
@@ -648,7 +651,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 	procFillRect.Call(hdc, uintptr(unsafe.Pointer(&RECT{0, titleHeight, 220 - shift, h})), brushSidebar)
 	drawChrome(hdc, w)
 	if shift == 0 {
-		textLine(hdc, "v0.7.10", RECT{24, h - 40, 212, h - 12}, fontSmall, true)
+		textLine(hdc, "v0.7.11", RECT{24, h - 40, 212, h - 12}, fontSmall, true)
 	}
 	icons := []string{"\uE80F", "\uE7F4", "\uE765", "\uE7F8", "\uE790", "\uE713", "\uE946"}
 	for i, name := range pageNames {
@@ -740,6 +743,14 @@ func drawMainUI(hdc uintptr, client RECT) {
 		settingCard(hdc, right, 258, "强调色", "", true)
 		settingCard(hdc, right, 358, "背景效果", "", false)
 		uiToggle(hdc, RECT{right - 76, 379, right - 28, 405}, preferences.Transparent, func() { preferences.Transparent = !preferences.Transparent; applyOpacity(hwndMain); saveConfig() })
+		settingCard(hdc, right, 458, "关闭主窗口时", "", true)
+		uiButton(hdc, RECT{right - 334, 478, right - 176, 512}, "收起到托盘", preferences.CloseToTray, true, func() { preferences.CloseToTray = true; saveConfig() })
+		uiButton(hdc, RECT{right - 166, 478, right - 24, 512}, "退出程序", !preferences.CloseToTray, true, func() { preferences.CloseToTray = false; saveConfig() })
+		captureNote := "整屏投影保留主控界面，投影端排除本窗口"
+		if !controlCaptureExclusionAvailable {
+			captureNote = "整屏排除不可用，投影前会提示收起窗口"
+		}
+		textLine(hdc, captureNote, RECT{264, 558, right - 20, 588}, fontDesc, true)
 	case 5:
 		settingCard(hdc, right, 158, "本地配置", "", false)
 		uiButton(hdc, RECT{264, 258, 444, 302}, "打开配置目录", false, true, func() { openLocation(filepath.Dir(configPath())) })
@@ -749,7 +760,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 		uiToggle(hdc, RECT{right - 76, 503, right - 28, 529}, preferences.Compatibility, func() { preferences.Compatibility = !preferences.Compatibility; saveConfig() })
 		drawPrivacyControls(hdc, right)
 	case 6:
-		settingCard(hdc, right, 158, "ProjEZ", "v0.7.10", false)
+		settingCard(hdc, right, 158, "ProjEZ", "v0.7.11", false)
 		textLine(hdc, "Windows 投影控制", RECT{264, 250, right - 20, 282}, fontDesc, true)
 		textLine(hdc, "窗口投影、冻结画面与临时黑屏", RECT{264, 286, right - 20, 318}, fontDesc, true)
 		uiButton(hdc, RECT{264, 350, 410, 388}, "使用说明", false, true, showUsageGuide)

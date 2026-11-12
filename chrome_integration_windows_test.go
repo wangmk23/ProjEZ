@@ -72,6 +72,38 @@ func TestChromeRenderHelper(t *testing.T) {
 	}
 	defer func() { procDestroyWindow.Call(hwndMain); cleanup() }()
 	applyWindowEffects(hwndMain)
+	if supportsControlExclusion() {
+		var composing int32
+		hr, _, _ := syscall.NewLazyDLL("dwmapi.dll").NewProc("DwmIsCompositionEnabled").Call(uintptr(unsafe.Pointer(&composing)))
+		if hr == 0 && composing != 0 {
+			controlCaptureExcluded = excludeControlWindow(hwndMain)
+			if !controlCaptureExcluded {
+				t.Fatal("control capture exclusion failed")
+			}
+			var affinity uint32
+			ok, _, _ := user32.NewProc("GetWindowDisplayAffinity").Call(hwndMain, uintptr(unsafe.Pointer(&affinity)))
+			if ok == 0 || affinity != 0x11 {
+				t.Fatal("control window capture affinity missing", affinity)
+			}
+		}
+	}
+	if shell, _, _ := user32.NewProc("FindWindowW").Call(uintptr(unsafe.Pointer(utf16Ptr("Shell_TrayWnd"))), 0); shell != 0 {
+		oldP, oldRunning := preferences, outputRunning
+		preferences.CloseToTray = true
+		outputRunning = true
+		procShowWindow.Call(hwndMain, SW_SHOWNOACTIVATE)
+		procSendMessageW.Call(hwndMain, WM_CLOSE, 0, 0)
+		exists, _, _ := user32.NewProc("IsWindow").Call(hwndMain)
+		visible, _, _ := user32.NewProc("IsWindowVisible").Call(hwndMain)
+		if exists == 0 || visible != 0 || !trayAdded || !outputRunning {
+			t.Fatal("close to tray destroyed output or hid without tray", exists, visible, trayAdded, outputRunning)
+		}
+		removeTray()
+		controlHidden = false
+		preferences, outputRunning = oldP, oldRunning
+		procShowWindow.Call(hwndMain, 0)
+	}
+
 	// Native key recording: send keys to the child edits without typing text
 	// or sending physical input into the user's desktop.
 	currentPage = 2
