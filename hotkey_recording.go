@@ -10,8 +10,9 @@ var recordingEdit uintptr
 var recordingOriginal string
 var hotkeyEditProcs = map[uintptr]uintptr{}
 var hotkeyEditCallback = syscall.NewCallback(hotkeyEditProc)
+var procGetKeyState = user32.NewProc("GetKeyState")
 var recordingKeyDown = func(vk uint32) bool {
-	state, _, _ := user32.NewProc("GetKeyState").Call(uintptr(vk))
+	state, _, _ := procGetKeyState.Call(uintptr(vk))
 	return state&0x8000 != 0
 }
 
@@ -41,7 +42,7 @@ func recordedHotkey(vk uint32, ctrl, alt, shift bool) string {
 	return strings.Join(append(parts, key), "+")
 }
 func styleHotkeyRecorder(hwnd uintptr) {
-	old, _, _ := user32.NewProc("SetWindowLongPtrW").Call(hwnd, ^uintptr(3), hotkeyEditCallback)
+	old, _, _ := procSetWindowLongPtrW.Call(hwnd, ^uintptr(3), hotkeyEditCallback)
 	if old != 0 {
 		hotkeyEditProcs[hwnd] = old
 		procSendMessageW.Call(hwnd, 0x00cf, 1, 0)
@@ -49,7 +50,7 @@ func styleHotkeyRecorder(hwnd uintptr) {
 }
 func hotkeyEditProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 	call := func() uintptr {
-		r, _, _ := user32.NewProc("CallWindowProcW").Call(hotkeyEditProcs[hwnd], hwnd, uintptr(msg), wp, lp)
+		r, _, _ := procCallWindowProcW.Call(hotkeyEditProcs[hwnd], hwnd, uintptr(msg), wp, lp)
 		return r
 	}
 	switch msg {
@@ -72,7 +73,7 @@ func hotkeyEditProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 	case 0x0100, 0x0104: // WM_KEYDOWN / WM_SYSKEYDOWN
 		if wp == 0x1b {
 			setText(hwnd, recordingOriginal)
-			user32.NewProc("SetFocus").Call(hwndMain)
+			procSetFocus.Call(hwndMain)
 			return 0
 		}
 		if wp == 0x09 {

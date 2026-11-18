@@ -46,3 +46,41 @@ func TestPreviewRetainsFrameOnTransientErrorButRejectsOldState(t *testing.T) {
 		t.Fatal("disabled preview exposes cached frame")
 	}
 }
+
+func TestGDIPreviewBufferReuseAndTimerSleep(t *testing.T) {
+	oldRunning, oldGPU, oldPending, oldMain, oldActive := outputRunning, gpuActive, pendingTrayRestore, hwndMain, previewTimerActive
+	defer func() {
+		outputRunning, gpuActive, pendingTrayRestore, hwndMain, previewTimerActive = oldRunning, oldGPU, oldPending, oldMain, oldActive
+		releaseGDIPreview()
+		gdiLastBuffer.release()
+	}()
+	hwndMain = 0
+	outputRunning = false
+	gpuActive = nil
+	pendingTrayRestore = false
+	syncPreviewTimer()
+	if previewTimerActive {
+		t.Fatal("preview timer active without window or session")
+	}
+
+	screenDC, _, _ := procGetDC.Call(0)
+	if screenDC == 0 {
+		t.Skip("no screen DC")
+	}
+	defer procReleaseDC.Call(0, screenDC)
+	if !gdiLastBuffer.ensure(screenDC, 320, 180) {
+		t.Fatal("failed to allocate gdiLastBuffer")
+	}
+	b1, err := readGDIPreview()
+	if err != nil || len(b1) != previewW*previewH*4 {
+		t.Fatalf("first readGDIPreview failed: %v len=%d", err, len(b1))
+	}
+	b2, err := readGDIPreview()
+	if err != nil || len(b2) != previewW*previewH*4 {
+		t.Fatalf("second readGDIPreview failed: %v len=%d", err, len(b2))
+	}
+	b3, err := readGDIPreview()
+	if err != nil || &b3[0] != &b1[0] || &b2[0] == &b1[0] {
+		t.Fatal("GDI preview double-buffer slices were not reused as expected")
+	}
+}

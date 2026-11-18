@@ -3,12 +3,12 @@
 <h1>ProjEZ</h1>
 <p><strong>Keep the audience's picture steady while you keep working.</strong></p>
 <p>Windows projection controls · Screen mirroring · Window capture · Freeze and black screen</p>
-<p><a href="README.md">中文</a> · <a href="https://github.com/wangmk23/ProjEZ/releases">Downloads</a> · <a href="docs/BUILD.md">Build instructions</a></p>
+<p><a href="README.md">中文</a> · <a href="https://github.com/wangmk23/ProjEZ/releases">Downloads</a> · <a href="docs/BUILD.md">Build instructions</a> · <a href="CHANGELOG.md">Changelog</a></p>
 </div>
 
 > **AI development disclosure:** This product was developed by AI, with its features and improvements guided by user requirements, testing, and feedback.
 
-ProjEZ mirrors your primary display or captures one application onto an extended display. Freeze the audience's frame while using other software on your control display, then resume. A black-screen action temporarily hides the output.
+ProjEZ mirrors your primary display or captures one application onto an extended display. Freeze the audience's frame while using other software on your control display, then resume. A black-screen action temporarily hides the output. On supported Windows 10 2004+ / Windows 11 systems, full-screen mirroring can exclude the ProjEZ control window from capture while keeping it visible on your primary display, and the window can optionally close to the system tray.
 
 <img src="docs/images/projection.png" alt="Projection controls in an empty demonstration state">
 

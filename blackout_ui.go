@@ -94,6 +94,15 @@ func dockHeaderRects(right int32) (RECT, RECT, RECT) {
 	status := RECT{450, top + 2, metric.Left - 8, top + 26}
 	return state, status, metric
 }
+func dockHoverHintRect(right int32) RECT {
+	top := footerTop()
+	stateRect, statusRect, metricRect := dockHeaderRects(right)
+	if statusRect.Right-statusRect.Left >= 160 {
+		return RECT{statusRect.Left, top + 2, metricRect.Left - 8, top + 27}
+	}
+	left := min32(stateRect.Left+76, metricRect.Left-120)
+	return RECT{left, top + 2, metricRect.Left - 8, top + 27}
+}
 func drawControlDock(dc uintptr, right int32) {
 	top := footerTop()
 	drawRounded(dc, RECT{244, top, right, top + 72}, 8, brushCard, penBorder)
@@ -131,8 +140,8 @@ func drawControlDock(dc uintptr, right int32) {
 			if i == 3 {
 				reason = "停止会关闭遮罩，目标返回 Windows 桌面"
 			}
-			// Replace the status line while hovering; disabled actions remain non-clickable.
-			hintRect := RECT{256, top + 2, metricRect.Left - 8, top + 27}
+			// Replace the status area while hovering; keep the left state/timer and right FPS visible.
+			hintRect := dockHoverHintRect(right)
 			procFillRect.Call(dc, uintptr(unsafe.Pointer(&hintRect)), brushCard)
 			textLine(dc, reason, hintRect, fontSmall, true)
 		}

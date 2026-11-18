@@ -23,16 +23,27 @@ var privacyCallback = syscall.NewCallback(func(hook, event, hwnd, obj, child, th
 	return 0
 })
 
+var (
+	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
+	procGetForegroundWindow      = user32.NewProc("GetForegroundWindow")
+	procGetAncestor              = user32.NewProc("GetAncestor")
+	procUnhookWinEvent           = user32.NewProc("UnhookWinEvent")
+	procSetWinEventHook          = user32.NewProc("SetWinEventHook")
+	procGetCurrentProcessId      = kernel32.NewProc("GetCurrentProcessId")
+	procGetShellWindow           = user32.NewProc("GetShellWindow")
+	procGetClassNameW            = user32.NewProc("GetClassNameW")
+)
+
 func windowPID(hwnd uintptr) uint32 {
 	var pid uint32
-	user32.NewProc("GetWindowThreadProcessId").Call(hwnd, uintptr(unsafe.Pointer(&pid)))
+	procGetWindowThreadProcessId.Call(hwnd, uintptr(unsafe.Pointer(&pid)))
 	return pid
 }
-func foregroundWindow() uintptr { h, _, _ := user32.NewProc("GetForegroundWindow").Call(); return h }
+func foregroundWindow() uintptr { h, _, _ := procGetForegroundWindow.Call(); return h }
 func privacyWindowInfo(hwnd uintptr) (uint32, uintptr, bool) {
 	pid := windowPID(hwnd)
-	owner, _, _ := user32.NewProc("GetAncestor").Call(hwnd, 3) // GA_ROOTOWNER
-	valid, _, _ := user32.NewProc("IsWindow").Call(privacy.target)
+	owner, _, _ := procGetAncestor.Call(hwnd, 3) // GA_ROOTOWNER
+	valid, _, _ := procIsWindow.Call(privacy.target)
 	return pid, owner, valid != 0 && windowPID(privacy.target) == privacy.pid
 }
 func privacyResumeAllowed() bool {
@@ -65,14 +76,14 @@ func setPrivacyEnabled(on bool) {
 		privacyDeadline = time.Time{}
 		privacyNote = "辅助保护已关闭；已有黑屏不会自动恢复"
 		if privacyHook != 0 {
-			user32.NewProc("UnhookWinEvent").Call(privacyHook)
+			procUnhookWinEvent.Call(privacyHook)
 			privacyHook = 0
 		}
 		procKillTimer.Call(hwndMain, privacyTimer)
 		return
 	}
 	if privacyHook == 0 {
-		privacyHook, _, _ = user32.NewProc("SetWinEventHook").Call(3, 3, 0, privacyCallback, 0, 0, 0)
+		privacyHook, _, _ = procSetWinEventHook.Call(3, 3, 0, privacyCallback, 0, 0, 0)
 	}
 	if privacyHook == 0 {
 		privacyNote = "无法启用前台监测，辅助保护未开启"
@@ -80,7 +91,7 @@ func setPrivacyEnabled(on bool) {
 		return
 	}
 	if timer, _, _ := procSetTimer.Call(hwndMain, privacyTimer, 100, 0); timer == 0 {
-		user32.NewProc("UnhookWinEvent").Call(privacyHook)
+		procUnhookWinEvent.Call(privacyHook)
 		privacyHook = 0
 		privacyNote = "无法创建监测计时器，辅助保护未开启"
 		return
@@ -126,17 +137,17 @@ func pollPrivacy() {
 		privacyDeadline = time.Time{}
 		h := foregroundWindow()
 		pid := windowPID(h)
-		ownPID, _, _ := kernel32.NewProc("GetCurrentProcessId").Call()
-		shell, _, _ := user32.NewProc("GetShellWindow").Call()
+		ownPID, _, _ := procGetCurrentProcessId.Call()
+		shell, _, _ := procGetShellWindow.Call()
 		var class [128]uint16
-		user32.NewProc("GetClassNameW").Call(h, uintptr(unsafe.Pointer(&class[0])), 128)
+		procGetClassNameW.Call(h, uintptr(unsafe.Pointer(&class[0])), 128)
 		name := syscall.UTF16ToString(class[:])
-		visible, _, _ := user32.NewProc("IsWindowVisible").Call(h)
+		visible, _, _ := procIsWindowVisible.Call(h)
 		if h == 0 || pid == 0 || pid == uint32(ownPID) || h == shell || visible == 0 || name == "Progman" || name == "WorkerW" || name == "Shell_TrayWnd" || name == "Shell_SecondaryTrayWnd" {
 			privacyNote = "未选到演示窗口，请重新选择（不支持桌面或本程序）"
 		} else {
 			var title [256]uint16
-			user32.NewProc("GetWindowTextW").Call(h, uintptr(unsafe.Pointer(&title[0])), 256)
+			procGetWindowTextW.Call(h, uintptr(unsafe.Pointer(&title[0])), 256)
 			privacy.target, privacy.pid = h, pid
 			privacyTitle = syscall.UTF16ToString(title[:])
 			privacyNote = "窗口已选定；开始投影后，切回该窗口按恢复快捷键"
@@ -146,16 +157,16 @@ func pollPrivacy() {
 	checkPrivacyForeground(foregroundWindow())
 }
 func drawPrivacyControls(dc uintptr, right int32) {
-	drawRounded(dc, RECT{244, 554, right, 788}, 8, brushCard, penBorder)
-	textLine(dc, "切离演示窗口时黑屏（辅助保护）", RECT{264, 564, right - 88, 594}, fontRow, false)
-	uiToggle(dc, RECT{right - 76, 566, right - 28, 592}, privacy.enabled, func() { setPrivacyEnabled(!privacy.enabled) })
-	uiButton(dc, RECT{264, 604, 466, 642}, "选择演示窗口（5秒）", false, true, choosePrivacyWindow)
-	textLine(dc, privacyNote, RECT{264, 650, right - 20, 678}, fontSmall, true)
+	drawRounded(dc, RECT{244, 416, right, 650}, 8, brushCard, penBorder)
+	textLine(dc, "切离演示窗口时黑屏（辅助保护）", RECT{264, 426, right - 88, 456}, fontRow, false)
+	uiToggle(dc, RECT{right - 76, 428, right - 28, 454}, privacy.enabled, func() { setPrivacyEnabled(!privacy.enabled) })
+	uiButton(dc, RECT{264, 466, 466, 504}, "选择演示窗口（5秒）", false, true, choosePrivacyWindow)
+	textLine(dc, privacyNote, RECT{264, 512, right - 20, 540}, fontSmall, true)
 	title := privacyTitle
 	if title == "" {
 		title = "尚未选定窗口；每次启动需要重新启用"
 	}
-	textLine(dc, title, RECT{264, 680, right - 20, 706}, fontDesc, false)
-	textLine(dc, "返回窗口不自动恢复；请使用快捷键页的恢复组合键。", RECT{264, 713, right - 20, 739}, fontSmall, true)
-	textLine(dc, "可能有过渡帧；不抢焦点的通知不会触发。敏感操作前请先黑屏。", RECT{264, 745, right - 20, 775}, fontSmall, true)
+	textLine(dc, title, RECT{264, 542, right - 20, 568}, fontDesc, false)
+	textLine(dc, "返回窗口不自动恢复；请使用快捷键页的恢复组合键。", RECT{264, 575, right - 20, 601}, fontSmall, true)
+	textLine(dc, "可能有过渡帧；不抢焦点的通知不会触发。敏感操作前请先黑屏。", RECT{264, 607, right - 20, 637}, fontSmall, true)
 }

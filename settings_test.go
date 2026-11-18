@@ -3,6 +3,7 @@
 package main
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -65,5 +66,38 @@ func TestProjectionScaling(t *testing.T) {
 		if w != tc.w || h != tc.h {
 			t.Errorf("scaling %+v returned %dx%d", tc, w, h)
 		}
+	}
+}
+
+func TestCompactControlWidthAndPageScroll(t *testing.T) {
+	oldW, oldH, oldPage := logicalWidth, logicalHeight, currentPage
+	defer func() { logicalWidth, logicalHeight, currentPage = oldW, oldH, oldPage }()
+
+	logicalWidth, logicalHeight = 1120, 820
+	if got := cardControlWidth(); got != 350 {
+		t.Fatalf("standard width control width = %d, want 350", got)
+	}
+	currentPage = 5
+	if got := maxPageScroll(); got != 0 {
+		t.Fatalf("advanced page requires scroll at 1120x820: %d", got)
+	}
+
+	logicalWidth = 640
+	cw := cardControlWidth()
+	right := logicalWidth - 28 + contentShift()
+	textSpan := (right - (cw + 24)) - 264
+	if cw != 240 || textSpan < 200 {
+		t.Fatalf("compact width 640 leaves insufficient text room: cw=%d textSpan=%d", cw, textSpan)
+	}
+}
+
+func TestReadmeVersionConsistency(t *testing.T) {
+	data, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "0.7.12") || strings.Contains(text, "ProjEZ-0.7.9.exe") {
+		t.Fatal("README.md version header or executable name is inconsistent with 0.7.12")
 	}
 }

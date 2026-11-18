@@ -10,11 +10,30 @@ import (
 const previewTimer = 0x4752
 
 var previewWanted = true
+var previewTimerActive bool
 var audienceFrame previewFrame
 var audienceError string
 var lastPreviewPoll time.Time
 var gdiPreviewDC, gdiPreviewBitmap, gdiPreviewOld uintptr
 var gdiPreviewBits unsafe.Pointer
+var gdiPreviewBufs [2][]byte
+var gdiPreviewBufIdx int
+
+func syncPreviewTimer() {
+	want := outputRunning || gpuActive != nil || pendingTrayRestore
+	if hwndMain == 0 {
+		previewTimerActive = false
+		return
+	}
+	if want && !previewTimerActive {
+		if t, _, _ := procSetTimer.Call(hwndMain, previewTimer, 33, 0); t != 0 {
+			previewTimerActive = true
+		}
+	} else if !want && previewTimerActive {
+		procKillTimer.Call(hwndMain, previewTimer)
+		previewTimerActive = false
+	}
+}
 
 func previewTop() int32 {
 	if currentPage == 0 {
@@ -26,10 +45,10 @@ func previewVisible() bool {
 	if !previewWanted || !outputRunning || (currentPage != 0 && currentPage != 1) {
 		return false
 	}
-	if v, _, _ := user32.NewProc("IsIconic").Call(hwndMain); v != 0 {
+	if v, _, _ := procIsIconic.Call(hwndMain); v != 0 {
 		return false
 	}
-	if v, _, _ := user32.NewProc("IsWindowVisible").Call(hwndMain); v == 0 {
+	if v, _, _ := procIsWindowVisible.Call(hwndMain); v == 0 {
 		return false
 	}
 	top := previewTop() - pageScroll
@@ -106,7 +125,7 @@ func readGDIPreview() ([]byte, error) {
 	if gdiPreviewDC == 0 {
 		gdiPreviewDC, _, _ = procCreateCompatibleDC.Call(gdiLastBuffer.dc)
 		h := previewHeader()
-		gdiPreviewBitmap, _, _ = gdi32.NewProc("CreateDIBSection").Call(gdiPreviewDC, uintptr(unsafe.Pointer(&h)), 0, uintptr(unsafe.Pointer(&gdiPreviewBits)), 0, 0)
+		gdiPreviewBitmap, _, _ = procCreateDIBSection.Call(gdiPreviewDC, uintptr(unsafe.Pointer(&h)), 0, uintptr(unsafe.Pointer(&gdiPreviewBits)), 0, 0)
 		if gdiPreviewDC == 0 || gdiPreviewBitmap == 0 {
 			releaseGDIPreview()
 			return nil, fmt.Errorf("预览内存不足")
@@ -116,13 +135,21 @@ func readGDIPreview() ([]byte, error) {
 	procBitBlt.Call(gdiPreviewDC, 0, 0, previewW, previewH, 0, 0, 0, BLACKNESS)
 	w, h := fitRect(gdiLastBuffer.w, gdiLastBuffer.h, previewW, previewH)
 	procSetStretchBltMode.Call(gdiPreviewDC, HALFTONE)
-	gdi32.NewProc("SetBrushOrgEx").Call(gdiPreviewDC, 0, 0, 0)
+	procSetBrushOrgEx.Call(gdiPreviewDC, 0, 0, 0)
 	ok, _, _ := procStretchBlt.Call(gdiPreviewDC, uintptr((previewW-w)/2), uintptr((previewH-h)/2), uintptr(w), uintptr(h), gdiLastBuffer.dc, 0, 0, uintptr(gdiLastBuffer.w), uintptr(gdiLastBuffer.h), SRCCOPY)
 	if ok == 0 {
 		return nil, fmt.Errorf("预览缩放失败")
 	}
-	gdi32.NewProc("GdiFlush").Call()
-	return append([]byte(nil), unsafe.Slice((*byte)(gdiPreviewBits), previewW*previewH*4)...), nil
+	procGdiFlush.Call()
+	size := previewW * previewH * 4
+	buf := gdiPreviewBufs[gdiPreviewBufIdx]
+	if len(buf) != size {
+		buf = make([]byte, size)
+		gdiPreviewBufs[gdiPreviewBufIdx] = buf
+	}
+	gdiPreviewBufIdx ^= 1
+	copy(buf, unsafe.Slice((*byte)(gdiPreviewBits), size))
+	return buf, nil
 }
 func releaseGDIPreview() {
 	if gdiPreviewOld != 0 {
@@ -136,6 +163,8 @@ func releaseGDIPreview() {
 	}
 	gdiPreviewDC, gdiPreviewBitmap, gdiPreviewOld = 0, 0, 0
 	gdiPreviewBits = nil
+	gdiPreviewBufs = [2][]byte{}
+	gdiPreviewBufIdx = 0
 }
 func resetAudiencePreview() { audienceFrame = previewFrame{}; audienceError = ""; releaseGDIPreview() }
 func previewCurrent() bool {
@@ -211,7 +240,7 @@ func drawAudiencePreview(dc uintptr, right, top int32) {
 		label = "预览已关闭"
 	} else if current {
 		header := previewHeader()
-		gdi32.NewProc("StretchDIBits").Call(dc, uintptr(r.Left), uintptr(r.Top), uintptr(w), uintptr(h), 0, 0, previewW, previewH, uintptr(unsafe.Pointer(&audienceFrame.Pixels[0])), uintptr(unsafe.Pointer(&header)), 0, SRCCOPY)
+		procStretchDIBits.Call(dc, uintptr(r.Left), uintptr(r.Top), uintptr(w), uintptr(h), 0, 0, previewW, previewH, uintptr(unsafe.Pointer(&audienceFrame.Pixels[0])), uintptr(unsafe.Pointer(&header)), 0, SRCCOPY)
 		switch audienceFrame.State {
 		case projectionFrozen:
 			label = "已冻结"

@@ -64,9 +64,9 @@ func applyPalette() {
 			dark = 0
 		}
 		procDwmSetWindowAttribute.Call(hwndMain, DWMWA_USE_IMMERSIVE_DARK_MODE, uintptr(unsafe.Pointer(&dark)), 4)
-		user32.NewProc("RedrawWindow").Call(hwndMain, 0, 0, 0x485)
+		procRedrawWindow.Call(hwndMain, 0, 0, 0x485)
 		for popup := range dropdownProcs {
-			user32.NewProc("RedrawWindow").Call(popup, 0, 0, 0x485)
+			procRedrawWindow.Call(popup, 0, 0, 0x485)
 		}
 	}
 }

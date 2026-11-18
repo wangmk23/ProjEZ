@@ -77,6 +77,7 @@ func TestChromeRenderHelper(t *testing.T) {
 		hr, _, _ := syscall.NewLazyDLL("dwmapi.dll").NewProc("DwmIsCompositionEnabled").Call(uintptr(unsafe.Pointer(&composing)))
 		if hr == 0 && composing != 0 {
 			controlCaptureExcluded = excludeControlWindow(hwndMain)
+			controlCaptureExclusionAvailable = controlCaptureExcluded
 			if !controlCaptureExcluded {
 				t.Fatal("control capture exclusion failed")
 			}
@@ -128,6 +129,34 @@ func TestChromeRenderHelper(t *testing.T) {
 		procSendMessageW.Call(edit, 8, 0, 0)
 	}
 	recordingKeyDown = oldDown
+	// Search Escape clears query and search message, and returns focus to main window.
+	setText(searchEdit, "帧率")
+	procSendMessageW.Call(hwndMain, WM_COMMAND, uintptr(idSearch)|uintptr(0x0300<<16), searchEdit)
+	if searchMessage == "" || currentPage != 3 {
+		t.Fatalf("search did not navigate: page=%d msg=%q", currentPage, searchMessage)
+	}
+	procSendMessageW.Call(searchEdit, 0x0100, 0x1b, 0)
+	if got := getText(searchEdit); got != "" || searchMessage != "" {
+		t.Fatalf("escape in search did not clear: text=%q msg=%q", got, searchMessage)
+	}
+	// Idle timer sleep verification: previewTimer must stay off while idle.
+	outputRunning = false
+	gpuActive = nil
+	pendingTrayRestore = false
+	syncPreviewTimer()
+	if previewTimerActive {
+		t.Fatal("preview timer should be inactive when idle")
+	}
+	outputRunning = true
+	syncPreviewTimer()
+	if !previewTimerActive {
+		t.Fatal("preview timer should activate when output is running")
+	}
+	outputRunning = false
+	syncPreviewTimer()
+	if previewTimerActive {
+		t.Fatal("preview timer should stop after output stops")
+	}
 	currentPage = 0
 	layoutControls(hwndMain)
 	// True native message/state tests. No mode changes or live projection.
@@ -243,6 +272,23 @@ func TestChromeRenderHelper(t *testing.T) {
 		}
 	}
 	// Narrow/high-DPI viewport: compact sidebar and scrolling keep controls usable.
+	procSetWindowPos.Call(hwndMain, 0, 0, 0, 640, 480, SWP_NOZORDER|SWP_NOACTIVATE|2)
+	for p := 0; p < len(pageNames); p++ {
+		currentPage = p
+		pageScroll = 0
+		layoutControls(hwndMain)
+		for _, child := range []uintptr{cbSource, cbOutput, sourceWindowCombo, editFreeze, editResume, editBlack, editStop, scaleCombo, fpsCombo, qualityCombo, accentCombo} {
+			if vis, _, _ := procIsWindowVisible.Call(child); vis != 0 {
+				var r RECT
+				procGetWindowRect.Call(child, uintptr(unsafe.Pointer(&r)))
+				procMapWindowPoints.Call(0, hwndMain, uintptr(unsafe.Pointer(&r)), 2)
+				if r.Left < 220-contentShift() || r.Right > logicalWidth || r.Top < 58 || r.Bottom > footerTop()-8 {
+					t.Fatalf("page %d visible control out of bounds at 640x480: %+v", p, r)
+				}
+			}
+		}
+	}
+	currentPage = 4
 	procSetWindowPos.Call(hwndMain, 0, 0, 0, 700, 520, SWP_NOZORDER|SWP_NOACTIVATE|2)
 	pageScroll = maxPageScroll()
 	layoutControls(hwndMain)

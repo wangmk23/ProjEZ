@@ -71,7 +71,7 @@ var controlBuffers = map[uintptr]*paintBuffer{}
 func styledControlProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 	old := controlWindowProcs[hwnd]
 	call := func(message uint32, w, l uintptr) uintptr {
-		r, _, _ := user32.NewProc("CallWindowProcW").Call(old, hwnd, uintptr(message), w, l)
+		r, _, _ := procCallWindowProcW.Call(old, hwnd, uintptr(message), w, l)
 		return r
 	}
 	if msg == 0x0082 {
@@ -87,6 +87,16 @@ func styledControlProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		if msg == 7 || msg == 8 {
 			searchFocused = msg == 7
 			invalidateLogical(searchBounds(logicalWidth))
+		}
+		if msg == 0x0100 && wp == 0x1b {
+			setText(searchEdit, "")
+			searchMessage = ""
+			procSetFocus.Call(hwndMain)
+			procInvalidateRect.Call(hwndMain, 0, 0)
+			return 0
+		}
+		if msg == 0x0102 && wp == 0x1b {
+			return 0
 		}
 		if msg != WM_PAINT && msg != 0x0318 {
 			return call(msg, wp, lp)
@@ -136,14 +146,14 @@ func styledControlProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 	textRect.Left += px(12)
 	textRect.Right -= px(32)
 	var label [1024]uint16
-	user32.NewProc("GetWindowTextW").Call(hwnd, uintptr(unsafe.Pointer(&label[0])), uintptr(len(label)))
+	procGetWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&label[0])), uintptr(len(label)))
 	drawText(b.dc, syscall.UTF16ToString(label[:]), textRect, controlFont, uiTextColor(), DT_VCENTER|DT_SINGLELINE|0x8000)
 	drawComboArrow(b.dc, hwnd, r)
 	procBitBlt.Call(hdc, 0, 0, uintptr(r.Right), uintptr(r.Bottom), b.dc, 0, 0, SRCCOPY)
 	return 0
 }
 func styleControl(hwnd uintptr) {
-	old, _, _ := user32.NewProc("SetWindowLongPtrW").Call(hwnd, ^uintptr(3), styledControlCallback) // GWLP_WNDPROC = -4
+	old, _, _ := procSetWindowLongPtrW.Call(hwnd, ^uintptr(3), styledControlCallback) // GWLP_WNDPROC = -4
 	if old != 0 {
 		controlWindowProcs[hwnd] = old
 	}
@@ -447,7 +457,7 @@ func updateHover(p POINT) {
 	}{Flags: 2, Hwnd: hwndMain}
 	tme.Size = uint32(unsafe.Sizeof(tme))
 	if p.X >= 0 {
-		user32.NewProc("TrackMouseEvent").Call(uintptr(unsafe.Pointer(&tme)))
+		procTrackMouseEvent.Call(uintptr(unsafe.Pointer(&tme)))
 	}
 	id, r := hoverRegion(p)
 	if id != lastHoverID {
@@ -461,6 +471,16 @@ func updateHover(p POINT) {
 		lastHoverID = id
 		lastHoverRect = r
 	}
+}
+func cardControlWidth() int32 {
+	if logicalWidth >= 820 {
+		return 350
+	}
+	w := logicalWidth - 400
+	if w < 220 {
+		w = 220
+	}
+	return w
 }
 func layoutControls(parent uintptr) {
 	if parent == 0 {
@@ -486,8 +506,9 @@ func layoutControls(parent uintptr) {
 		}
 	}
 	search := searchBounds(logicalWidth)
-	procSetWindowPos.Call(searchEdit, 0, uintptr(px(search.Left+14)), uintptr(px(search.Top+6)), uintptr(px(search.Right-search.Left-28)), uintptr(px(23)), SWP_NOZORDER|SWP_NOACTIVATE)
-	controlX := logicalWidth - 398
+	procSetWindowPos.Call(searchEdit, 0, uintptr(px(search.Left+14)), uintptr(px(search.Top+6)), uintptr(px(search.Right-search.Left-46)), uintptr(px(23)), SWP_NOZORDER|SWP_NOACTIVATE)
+	cw := cardControlWidth()
+	controlX := logicalWidth - 48 - cw
 	place := func(hwnd uintptr, y int32, show, combo bool) {
 		y -= pageScroll
 		if y < 58 || y+32 > footerTop()-8 {
@@ -497,7 +518,7 @@ func layoutControls(parent uintptr) {
 		if combo {
 			height = 220
 		}
-		x, width := controlX, int32(350)
+		x, width := controlX, cw
 		if !combo {
 			x += 12
 			y += 7
@@ -508,7 +529,7 @@ func layoutControls(parent uintptr) {
 		if combo {
 			procSendMessageW.Call(hwnd, 0x0153, ^uintptr(0), uintptr(px(28)))
 			procSendMessageW.Call(hwnd, 0x0153, 0, uintptr(px(28)))
-			procSendMessageW.Call(hwnd, 0x0160, uintptr(px(350)), 0)
+			procSendMessageW.Call(hwnd, 0x0160, uintptr(px(cw)), 0)
 		}
 		v := uintptr(0)
 		if show {
@@ -523,27 +544,27 @@ func layoutControls(parent uintptr) {
 		if outputRunning {
 			v = 0
 		}
-		user32.NewProc("EnableWindow").Call(c, v)
+		procEnableWindow.Call(c, v)
 	}
 	place(cbOutput, 261, currentPage == 1, true)
-	place(editFreeze, 181, currentPage == 2, false)
-	place(editResume, 261, currentPage == 2, false)
-	place(editBlack, 341, currentPage == 2, false)
-	place(editStop, 421, currentPage == 2, false)
+	place(editFreeze, 177, currentPage == 2, false)
+	place(editResume, 257, currentPage == 2, false)
+	place(editBlack, 337, currentPage == 2, false)
+	place(editStop, 417, currentPage == 2, false)
 	place(scaleCombo, 181, currentPage == 3, true)
 	place(fpsCombo, 281, currentPage == 3, true)
 	place(qualityCombo, 381, currentPage == 3, true)
 	place(accentCombo, 281, currentPage == 4, true)
 }
 func openLocation(target string) {
-	r, _, _ := syscall.NewLazyDLL("shell32.dll").NewProc("ShellExecuteW").Call(hwndMain, uintptr(unsafe.Pointer(utf16Ptr("open"))), uintptr(unsafe.Pointer(utf16Ptr(target))), 0, 0, SW_SHOW)
+	r, _, _ := shell32.NewProc("ShellExecuteW").Call(hwndMain, uintptr(unsafe.Pointer(utf16Ptr("open"))), uintptr(unsafe.Pointer(utf16Ptr(target))), 0, 0, SW_SHOW)
 	if r <= 32 {
 		setStatus("无法打开，请手动访问：" + target)
 	}
 }
 
 func resetHotkeys() {
-	user32.NewProc("SetFocus").Call(hwndMain)
+	procSetFocus.Call(hwndMain)
 	loadingSettings = true
 	setText(editFreeze, "Ctrl+Alt+F8")
 	setText(editResume, "Ctrl+Alt+F9")
@@ -630,7 +651,7 @@ func settingCard(hdc uintptr, right, top int32, title, description string, hasCo
 	drawRounded(hdc, RECT{244, top, right, top + 72}, 8, brushCard, penBorder)
 	end := right - 20
 	if hasControl {
-		end = right - 374
+		end = right - (cardControlWidth() + 24)
 	}
 	if description == "" {
 		textLine(hdc, title, RECT{264, top, end, top + 72}, fontRow, false)
@@ -651,7 +672,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 	procFillRect.Call(hdc, uintptr(unsafe.Pointer(&RECT{0, titleHeight, 220 - shift, h})), brushSidebar)
 	drawChrome(hdc, w)
 	if shift == 0 {
-		textLine(hdc, "v0.7.11", RECT{24, h - 40, 212, h - 12}, fontSmall, true)
+		textLine(hdc, "v0.7.12", RECT{24, h - 40, 212, h - 12}, fontSmall, true)
 	}
 	icons := []string{"\uE80F", "\uE7F4", "\uE765", "\uE7F8", "\uE790", "\uE713", "\uE946"}
 	for i, name := range pageNames {
@@ -685,21 +706,29 @@ func drawMainUI(hdc uintptr, client RECT) {
 		drawHome(hdc, right)
 	case 1:
 		drawSourceModes(hdc)
+		cw := cardControlWidth()
 		for i, title := range []string{"我的屏幕", "观众屏幕"} {
 			if i == 0 && preferences.WindowMode {
 				title = "投影窗口"
 			}
 			top := int32(158 + i*80)
 			drawRounded(hdc, RECT{244, top, right, top + 70}, 8, brushCard, penBorder)
-			textLine(hdc, title, RECT{264, top, right - 374, top + 70}, fontRow, false)
+			textLine(hdc, title, RECT{264, top, right - (cw + 24), top + 70}, fontRow, false)
 		}
 		textLine(hdc, sourceRouteLabel(), RECT{264, 314, right - 20, 342}, fontRow, false)
-		uiButton(hdc, RECT{264, 350, 410, 386}, "刷新列表", false, !outputRunning, refreshSourceWindows)
-		uiButton(hdc, RECT{424, 350, 570, 386}, "刷新屏幕", false, !outputRunning, refreshMonitors)
+		btnW := int32(146)
+		gap := int32(14)
+		if right < 840 {
+			btnW = 112
+			gap = 10
+		}
+		uiButton(hdc, RECT{264, 350, 264 + btnW, 386}, "刷新列表", false, !outputRunning, refreshSourceWindows)
+		uiButton(hdc, RECT{264 + btnW + gap, 350, 264 + 2*btnW + gap, 386}, "刷新屏幕", false, !outputRunning, refreshMonitors)
 		drawAudiencePreview(hdc, right, 404)
 		drawCursorControl(hdc, right, 352)
 	case 2:
-		focus, _, _ := user32.NewProc("GetFocus").Call()
+		focus, _, _ := procGetFocus.Call()
+		cw := cardControlWidth()
 		for i, edit := range []uintptr{editFreeze, editResume, editBlack, editStop} {
 			top := int32(158 + i*80)
 			desc, warning := actionHotkeyHint(i, actionHotkeyTexts())
@@ -708,7 +737,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 			}
 			settingCard(hdc, right, top, actionHotkeyNames[i]+"快捷键", desc, true)
 			if warning {
-				warningRect := RECT{264, top + 36, right - 374, top + 60}
+				warningRect := RECT{264, top + 36, right - (cw + 24), top + 60}
 				procFillRect.Call(hdc, uintptr(unsafe.Pointer(&warningRect)), brushCard)
 				color := rgb(251, 191, 36)
 				if preferences.LightTheme {
@@ -720,8 +749,8 @@ func drawMainUI(hdc uintptr, client RECT) {
 			if focus == edit {
 				border = penAccent
 			}
-			y := top + 23
-			drawRounded(hdc, RECT{right - 370, y, right - 20, y + 34}, 6, brushControl, border)
+			y := top + 19
+			drawRounded(hdc, RECT{right - (cw + 20), y, right - 20, y + 34}, 6, brushControl, border)
 		}
 		uiButton(hdc, RECT{264, 486, 410, 528}, "保存快捷键", true, true, func() { applyHotkeys(true); saveConfig() })
 		uiButton(hdc, RECT{424, 486, 584, 528}, "恢复默认快捷键", false, true, resetHotkeys)
@@ -752,15 +781,15 @@ func drawMainUI(hdc uintptr, client RECT) {
 		}
 		textLine(hdc, captureNote, RECT{264, 558, right - 20, 588}, fontDesc, true)
 	case 5:
-		settingCard(hdc, right, 158, "本地配置", "", false)
-		uiButton(hdc, RECT{264, 258, 444, 302}, "打开配置目录", false, true, func() { openLocation(filepath.Dir(configPath())) })
-		settingCard(hdc, right, 330, "恢复默认设置", "重置投影、外观和快捷键", false)
-		uiButton(hdc, RECT{264, 430, 444, 474}, "恢复默认设置", false, true, resetSettings)
-		textLine(hdc, "强制 GDI 兼容模式（下次开始生效）", RECT{264, 500, right - 90, 532}, fontDesc, true)
-		uiToggle(hdc, RECT{right - 76, 503, right - 28, 529}, preferences.Compatibility, func() { preferences.Compatibility = !preferences.Compatibility; saveConfig() })
+		settingCard(hdc, right, 158, "本地配置", "保存位置与个人偏好设置", false)
+		uiButton(hdc, RECT{right - 184, 177, right - 24, 211}, "打开配置目录", false, true, func() { openLocation(filepath.Dir(configPath())) })
+		settingCard(hdc, right, 244, "恢复默认设置", "重置投影、外观和快捷键", false)
+		uiButton(hdc, RECT{right - 184, 263, right - 24, 297}, "恢复默认设置", false, true, resetSettings)
+		settingCard(hdc, right, 330, "强制 GDI 兼容模式", "下次开始投影时生效", false)
+		uiToggle(hdc, RECT{right - 76, 353, right - 28, 379}, preferences.Compatibility, func() { preferences.Compatibility = !preferences.Compatibility; saveConfig() })
 		drawPrivacyControls(hdc, right)
 	case 6:
-		settingCard(hdc, right, 158, "ProjEZ", "v0.7.11", false)
+		settingCard(hdc, right, 158, "ProjEZ", "v0.7.12", false)
 		textLine(hdc, "Windows 投影控制", RECT{264, 250, right - 20, 282}, fontDesc, true)
 		textLine(hdc, "窗口投影、冻结画面与临时黑屏", RECT{264, 286, right - 20, 318}, fontDesc, true)
 		uiButton(hdc, RECT{264, 350, 410, 388}, "使用说明", false, true, showUsageGuide)

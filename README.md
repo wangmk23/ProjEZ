@@ -6,10 +6,10 @@
   <p>
     <img alt="Windows 10 1903+ / 11" src="https://img.shields.io/badge/Windows-10%201903%2B%20%7C%2011-0078D4?style=flat-square">
     <img alt="x64" src="https://img.shields.io/badge/architecture-x64-475569?style=flat-square">
-    <img alt="Version 0.7.8" src="https://img.shields.io/badge/version-0.7.8-2563EB?style=flat-square">
+    <img alt="Version 0.7.8 (Pre-release 0.7.12)" src="https://img.shields.io/badge/version-0.7.8%20(pre%200.7.12)-2563EB?style=flat-square">
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-16A34A?style=flat-square"></a>
   </p>
-  <p><a href="https://github.com/wangmk23/ProjEZ/releases">下载</a> · <a href="#开始使用">开始使用</a> · <a href="docs/BUILD.md">构建</a> · <a href="docs/FAQ.md">常见问题</a> · <a href="README.en.md">English</a></p>
+  <p><a href="https://github.com/wangmk23/ProjEZ/releases">下载</a> · <a href="#开始使用">开始使用</a> · <a href="docs/BUILD.md">构建</a> · <a href="docs/FAQ.md">常见问题</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="README.en.md">English</a></p>
 </div>
 
 > **AI 编制声明**：本产品由 AI 开发，功能与改进方向来自使用者的需求、测试和反馈。
@@ -26,11 +26,11 @@
 
 | 投影 | 控制 | 设置 |
 | --- | --- | --- |
-| 完整复制主屏，保持画面比例 | 冻结画面，本机继续操作 | 四项快捷键直接按组合键录制 |
+| 完整复制主屏，保持画面比例 | 冻结画面，本机继续操作 | 四项快捷键直接按组合键录制与冲突检测 |
 | 只投选定应用窗口 | 黑屏隐藏内容，手动恢复 | 识别显示器上报的品牌或型号 |
-| 预览程序提交的观众画面 | 鼠标可限制在主控屏 | 深浅主题、缩放质量与帧率设置 |
+| 预览程序提交的观众画面 | 鼠标可限制在主控屏 | 深浅主题、缩放质量、帧率与关闭收起托盘 |
 
-采用 DirectX GPU 捕获与绘制；整屏模式在不支持时可使用 GDI 兼容路径。窗口捕获失败时保持黑屏，不回退为整个桌面。相同尺寸保留原像素，GPU 缩小采用面积加权，减少细线丢失。
+采用 DirectX GPU 捕获与绘制；整屏模式在不支持时可使用 GDI 兼容路径。窗口捕获失败时保持黑屏，不回退为整个桌面。相同尺寸保留原像素，GPU 缩小采用面积加权，减少细线丢失。支持 Windows 10 2004+ / Windows 11 的整屏投影自动从捕获画面中排除 ProjEZ 主控窗口，保持主控屏操作界面可见而投影端不显示（详见预发布版说明）。
 
 ## 开始使用
 

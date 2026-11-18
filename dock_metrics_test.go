@@ -16,6 +16,10 @@ func TestDockMetricsRemainVisible(t *testing.T) {
 		if fps.Right-fps.Left < 150 || fps.Right-contentShift() > w-28 || state.Right > fps.Left || status.Right > fps.Left {
 			t.Fatalf("width %d hides/overlaps FPS: %v %v %v", w, state, status, fps)
 		}
+		hint := dockHoverHintRect(right)
+		if hint.Left <= state.Left+60 || hint.Right > fps.Left || hint.Right-hint.Left < 120 {
+			t.Fatalf("width %d hover hint overlaps left state or FPS: state=%v hint=%v fps=%v", w, state, hint, fps)
+		}
 	}
 }
 func TestDockMetricsReflectState(t *testing.T) {

@@ -26,6 +26,7 @@ func beginProjectionBackend() {
 	gpuOwnsOutput = true
 	gpuLastEvent = projectionEvent{State: projectionStarting, Backend: "DirectX GPU"}
 	gpuActive = startGPUSession(currentGPUConfig())
+	syncPreviewTimer()
 	procSetTimer.Call(hwndMain, gpuPollTimer, 100, 0)
 	setStatus("正在初始化 GPU 投影…")
 }
@@ -89,6 +90,7 @@ func pollGPUEvents() {
 		}
 		stopping := gpuController.desired == projectionStopping || closingMain
 		gpuActive = nil
+		syncPreviewTimer()
 		procKillTimer.Call(hwndMain, gpuPollTimer)
 		if activeSourceWindow.HWND != 0 && !stopping {
 			blackout = true

@@ -52,7 +52,7 @@ func maxPageScroll() int32 {
 		bottom = 610
 	}
 	if currentPage == 5 {
-		bottom = 806
+		bottom = 668
 	}
 	if currentPage == 0 {
 		bottom = 654
@@ -123,29 +123,28 @@ func maximizeBounds(m, w RECT) (POINT, POINT) {
 	return POINT{w.Left - m.Left, w.Top - m.Top}, POINT{w.Right - w.Left, w.Bottom - w.Top}
 }
 func windowMonitor(hwnd uintptr) (MONITORINFOEX, bool) {
-	h, _, _ := user32.NewProc("MonitorFromWindow").Call(hwnd, 2)
+	h, _, _ := procMonitorFromWindow.Call(hwnd, 2)
 	mi := MONITORINFOEX{}
 	mi.CbSize = uint32(unsafe.Sizeof(mi))
 	ok, _, _ := procGetMonitorInfoW.Call(h, uintptr(unsafe.Pointer(&mi)))
 	return mi, ok != 0
 }
 func queryWindowDPI(hwnd uintptr) int32 {
-	p := user32.NewProc("GetDpiForWindow")
-	if p.Find() == nil {
-		d, _, _ := p.Call(hwnd)
+	if procGetDpiForWindow.Find() == nil {
+		d, _, _ := procGetDpiForWindow.Call(hwnd)
 		if d > 0 {
 			return int32(d)
 		}
 	}
 	return 96
 }
-func isMaximized(hwnd uintptr) bool { v, _, _ := user32.NewProc("IsZoomed").Call(hwnd); return v != 0 }
+func isMaximized(hwnd uintptr) bool { v, _, _ := procIsZoomed.Call(hwnd); return v != 0 }
 func logicalPoint(lp uintptr) POINT {
 	return POINT{dip(int32(int16(lp & 0xffff))), dip(int32(int16(lp >> 16)))}
 }
 func screenPointToClient(hwnd uintptr, lp uintptr) POINT {
 	p := POINT{int32(int16(lp & 0xffff)), int32(int16(lp >> 16))}
-	user32.NewProc("ScreenToClient").Call(hwnd, uintptr(unsafe.Pointer(&p)))
+	procScreenToClient.Call(hwnd, uintptr(unsafe.Pointer(&p)))
 	return p
 }
 func invalidateLogical(r RECT) {
@@ -177,7 +176,7 @@ func clickChrome(hwnd uintptr, p POINT) bool {
 	for i := 1; i <= 3; i++ {
 		if ptInRect(p, chromeButtonRect(logicalWidth, i)) {
 			chromePressed = 0
-			user32.NewProc("ReleaseCapture").Call()
+			procReleaseCapture.Call()
 			command := uintptr(0xf020)
 			if i == 2 {
 				command = 0xf030
@@ -248,13 +247,13 @@ func chromeMessage(hwnd uintptr, msg uint32, wp, lp uintptr) (uintptr, bool) {
 			Time        uint32
 		}{Flags: 0x12, Hwnd: hwnd}
 		tme.Size = uint32(unsafe.Sizeof(tme))
-		user32.NewProc("TrackMouseEvent").Call(uintptr(unsafe.Pointer(&tme)))
+		procTrackMouseEvent.Call(uintptr(unsafe.Pointer(&tme)))
 	case 0x02a2:
 		refreshChromeHover(POINT{-1, -1})
 	case 0x00a1:
 		if wp == 9 {
 			chromePressed = 2
-			user32.NewProc("SetCapture").Call(hwnd)
+			procSetCapture.Call(hwnd)
 			return 0, true
 		}
 	case 0x00a2: // alternate NC up delivery
@@ -301,13 +300,13 @@ func drawChrome(hdc uintptr, w int32) {
 		pen = penAccent
 	}
 	drawRounded(hdc, search, 11, brushControl, pen)
+	drawText(hdc, "\uE721", RECT{search.Right - 34, search.Top, search.Right - 8, search.Bottom}, fontNavIcon, uiMutedColor(), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	for i := 1; i <= 3; i++ {
 		r := chromeButtonRect(w, i)
 		if chromeHover == i {
 			b := brushControl
 			if i == 3 {
-				b = makeBrush(196, 43, 28)
-				defer procDeleteObject.Call(b)
+				b = brushCloseHover
 			}
 			procFillRect.Call(hdc, uintptr(unsafe.Pointer(&r)), b)
 		}
@@ -325,27 +324,27 @@ func drawChrome(hdc uintptr, w int32) {
 	}
 }
 func beginLogicalDC(dc uintptr) int {
-	saved, _, _ := gdi32.NewProc("SaveDC").Call(dc)
-	gdi32.NewProc("SetMapMode").Call(dc, 8)
-	gdi32.NewProc("SetWindowExtEx").Call(dc, 96, 96, 0)
-	gdi32.NewProc("SetViewportExtEx").Call(dc, uintptr(windowDPI), uintptr(windowDPI), 0)
+	saved, _, _ := procSaveDC.Call(dc)
+	procSetMapMode.Call(dc, 8)
+	procSetWindowExtEx.Call(dc, 96, 96, 0)
+	procSetViewportExtEx.Call(dc, uintptr(windowDPI), uintptr(windowDPI), 0)
 	return int(saved)
 }
-func endLogicalDC(dc uintptr, saved int) { gdi32.NewProc("RestoreDC").Call(dc, uintptr(saved)) }
+func endLogicalDC(dc uintptr, saved int) { procRestoreDC.Call(dc, uintptr(saved)) }
 func beginBody(dc uintptr, scroll bool) int {
-	saved, _, _ := gdi32.NewProc("SaveDC").Call(dc)
+	saved, _, _ := procSaveDC.Call(dc)
 	shift := contentShift()
 	top, bottom := int32(58), footerTop()-8
 	if !scroll {
 		top = footerTop()
 		bottom = logicalHeight
 	}
-	gdi32.NewProc("IntersectClipRect").Call(dc, uintptr(220-shift), uintptr(top), uintptr(logicalWidth), uintptr(bottom))
+	procIntersectClipRect.Call(dc, uintptr(220-shift), uintptr(top), uintptr(logicalWidth), uintptr(bottom))
 	y := int32(0)
 	if scroll {
 		y = pageScroll
 	}
-	gdi32.NewProc("SetWindowOrgEx").Call(dc, uintptr(shift), uintptr(y), 0)
+	procSetWindowOrgEx.Call(dc, uintptr(shift), uintptr(y), 0)
 	paintingPage = scroll
 	return int(saved)
 }

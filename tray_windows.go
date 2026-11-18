@@ -30,8 +30,17 @@ type trayIconData struct {
 	BalloonIcon         uintptr
 }
 
-var trayAdded, controlHidden, pendingTrayRestore bool
-var taskbarCreatedMessage, _, _ = user32.NewProc("RegisterWindowMessageW").Call(uintptr(unsafe.Pointer(utf16Ptr("TaskbarCreated"))))
+var (
+	trayAdded, controlHidden, pendingTrayRestore bool
+	taskbarCreatedMessage, _, _                  = user32.NewProc("RegisterWindowMessageW").Call(uintptr(unsafe.Pointer(utf16Ptr("TaskbarCreated"))))
+	procShellNotifyIconW                         = shell32.NewProc("Shell_NotifyIconW")
+	procSetForegroundWindow                      = user32.NewProc("SetForegroundWindow")
+	procCreatePopupMenu                          = user32.NewProc("CreatePopupMenu")
+	procDestroyMenu                              = user32.NewProc("DestroyMenu")
+	procAppendMenuW                              = user32.NewProc("AppendMenuW")
+	procGetCursorPos                             = user32.NewProc("GetCursorPos")
+	procTrackPopupMenu                           = user32.NewProc("TrackPopupMenu")
+)
 
 func trayData() trayIconData {
 	d := trayIconData{Window: hwndMain, ID: 1, Flags: 7, Callback: trayMessage, Icon: appIcon}
@@ -50,14 +59,14 @@ func ensureTray() bool {
 	if d.Icon == 0 {
 		d.Icon, _, _ = procLoadIconW.Call(0, IDI_APPLICATION)
 	}
-	ok, _, _ := syscall.NewLazyDLL("shell32.dll").NewProc("Shell_NotifyIconW").Call(0, uintptr(unsafe.Pointer(&d)))
+	ok, _, _ := procShellNotifyIconW.Call(0, uintptr(unsafe.Pointer(&d)))
 	trayAdded = ok != 0
 	return trayAdded
 }
 func removeTray() {
 	if trayAdded {
 		d := trayData()
-		syscall.NewLazyDLL("shell32.dll").NewProc("Shell_NotifyIconW").Call(2, uintptr(unsafe.Pointer(&d)))
+		procShellNotifyIconW.Call(2, uintptr(unsafe.Pointer(&d)))
 	}
 	trayAdded = false
 }
@@ -67,7 +76,7 @@ var hideControlToTray = func() bool {
 		setStatus("无法创建托盘图标，窗口保持打开")
 		return false
 	}
-	user32.NewProc("SetFocus").Call(hwndMain)
+	procSetFocus.Call(hwndMain)
 	controlHidden = true
 	procShowWindow.Call(hwndMain, 0)
 	pollAudiencePreview()
@@ -75,6 +84,7 @@ var hideControlToTray = func() bool {
 }
 var exitApplication = func() {
 	pendingTrayRestore = false
+	syncPreviewTimer()
 	if gpuActive != nil {
 		closingMain = true
 		stopOutput()
@@ -93,20 +103,22 @@ func handleMainClose() {
 }
 func showControlWindow() {
 	pendingTrayRestore = false
+	syncPreviewTimer()
 	controlHidden = false
-	visible, _, _ := user32.NewProc("IsIconic").Call(hwndMain)
+	visible, _, _ := procIsIconic.Call(hwndMain)
 	if visible != 0 {
 		procShowWindow.Call(hwndMain, 9)
 	} else {
 		procShowWindow.Call(hwndMain, 5)
 	}
-	user32.NewProc("SetForegroundWindow").Call(hwndMain)
+	procSetForegroundWindow.Call(hwndMain)
 	pollAudiencePreview()
 }
 func requestTrayRestore() {
 	// On older systems, never reveal an unexcluded control window over a live mirror.
 	if outputRunning && activeSourceWindow.HWND == 0 && !controlCaptureExcluded && confirmedOutputState() != projectionBlack {
 		pendingTrayRestore = true
+		syncPreviewTimer()
 		blackOutput()
 		return
 	}
@@ -118,11 +130,11 @@ func finishTrayRestore() {
 	}
 }
 func showTrayMenu() {
-	menu, _, _ := user32.NewProc("CreatePopupMenu").Call()
+	menu, _, _ := procCreatePopupMenu.Call()
 	if menu == 0 {
 		return
 	}
-	defer user32.NewProc("DestroyMenu").Call(menu)
+	defer procDestroyMenu.Call(menu)
 	for _, entry := range []struct {
 		id   uintptr
 		text string
@@ -131,12 +143,12 @@ func showTrayMenu() {
 		if entry.id >= trayFreeze && entry.id <= trayStop && !outputRunning {
 			flags = 1
 		}
-		user32.NewProc("AppendMenuW").Call(menu, flags, entry.id, uintptr(unsafe.Pointer(utf16Ptr(entry.text))))
+		procAppendMenuW.Call(menu, flags, entry.id, uintptr(unsafe.Pointer(utf16Ptr(entry.text))))
 	}
 	var p POINT
-	user32.NewProc("GetCursorPos").Call(uintptr(unsafe.Pointer(&p)))
-	user32.NewProc("SetForegroundWindow").Call(hwndMain)
-	id, _, _ := user32.NewProc("TrackPopupMenu").Call(menu, 0x0102, uintptr(int64(p.X)), uintptr(int64(p.Y)), 0, hwndMain, 0)
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&p)))
+	procSetForegroundWindow.Call(hwndMain)
+	id, _, _ := procTrackPopupMenu.Call(menu, 0x0102, uintptr(int64(p.X)), uintptr(int64(p.Y)), 0, hwndMain, 0)
 	procPostFrame.Call(hwndMain, 0, 0, 0)
 	switch id {
 	case trayShow:

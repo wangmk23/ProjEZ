@@ -26,6 +26,7 @@ var (
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 	dwmapi   = syscall.NewLazyDLL("dwmapi.dll")
 	uxtheme  = syscall.NewLazyDLL("uxtheme.dll")
+	shell32  = syscall.NewLazyDLL("shell32.dll")
 
 	procRegisterClassExW     = user32.NewProc("RegisterClassExW")
 	procCreateWindowExW      = user32.NewProc("CreateWindowExW")
@@ -65,6 +66,29 @@ var (
 	procFillRect             = user32.NewProc("FillRect")
 	procCreateIconFromResEx  = user32.NewProc("CreateIconFromResourceEx")
 	procSetLayeredWindowAttr = user32.NewProc("SetLayeredWindowAttributes")
+	procMonitorFromWindow    = user32.NewProc("MonitorFromWindow")
+	procGetDpiForWindow      = user32.NewProc("GetDpiForWindow")
+	procGetDpiForSystem      = user32.NewProc("GetDpiForSystem")
+	procIsZoomed             = user32.NewProc("IsZoomed")
+	procIsIconic             = user32.NewProc("IsIconic")
+	procIsWindowVisible      = user32.NewProc("IsWindowVisible")
+	procIsWindow             = user32.NewProc("IsWindow")
+	procScreenToClient       = user32.NewProc("ScreenToClient")
+	procTrackMouseEvent      = user32.NewProc("TrackMouseEvent")
+	procSetCapture           = user32.NewProc("SetCapture")
+	procReleaseCapture       = user32.NewProc("ReleaseCapture")
+	procSetCursor            = user32.NewProc("SetCursor")
+	procSetFocus             = user32.NewProc("SetFocus")
+	procGetFocus             = user32.NewProc("GetFocus")
+	procEnableWindow         = user32.NewProc("EnableWindow")
+	procGetWindowRect        = user32.NewProc("GetWindowRect")
+	procMapWindowPoints      = user32.NewProc("MapWindowPoints")
+	procCallWindowProcW      = user32.NewProc("CallWindowProcW")
+	procSetWindowLongPtrW    = user32.NewProc("SetWindowLongPtrW")
+	procGetComboBoxInfo      = user32.NewProc("GetComboBoxInfo")
+	procSetWindowRgn         = user32.NewProc("SetWindowRgn")
+	procGetWindowDC          = user32.NewProc("GetWindowDC")
+	procRedrawWindow         = user32.NewProc("RedrawWindow")
 
 	procCreateCompatibleDC     = gdi32.NewProc("CreateCompatibleDC")
 	procDeleteDC               = gdi32.NewProc("DeleteDC")
@@ -82,6 +106,23 @@ var (
 	procSetBkColor             = gdi32.NewProc("SetBkColor")
 	procCreateFontW            = gdi32.NewProc("CreateFontW")
 	procGetStockObject         = gdi32.NewProc("GetStockObject")
+	procSaveDC                 = gdi32.NewProc("SaveDC")
+	procRestoreDC              = gdi32.NewProc("RestoreDC")
+	procSetMapMode             = gdi32.NewProc("SetMapMode")
+	procSetWindowExtEx         = gdi32.NewProc("SetWindowExtEx")
+	procSetViewportExtEx       = gdi32.NewProc("SetViewportExtEx")
+	procSetWindowOrgEx         = gdi32.NewProc("SetWindowOrgEx")
+	procSetViewportOrgEx       = gdi32.NewProc("SetViewportOrgEx")
+	procIntersectClipRect      = gdi32.NewProc("IntersectClipRect")
+	procSetBrushOrgEx          = gdi32.NewProc("SetBrushOrgEx")
+	procCreateRoundRectRgn     = gdi32.NewProc("CreateRoundRectRgn")
+	procGetObjectW             = gdi32.NewProc("GetObjectW")
+	procLPtoDP                 = gdi32.NewProc("LPtoDP")
+	procMoveToEx               = gdi32.NewProc("MoveToEx")
+	procLineTo                 = gdi32.NewProc("LineTo")
+	procStretchDIBits          = gdi32.NewProc("StretchDIBits")
+	procCreateDIBSection       = gdi32.NewProc("CreateDIBSection")
+	procGdiFlush               = gdi32.NewProc("GdiFlush")
 
 	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
 
@@ -312,13 +353,14 @@ var (
 	fontSmall    uintptr
 	fontIcon     uintptr
 
-	rStart     RECT
-	rFreeze    RECT
-	rResume    RECT
-	rToggle    RECT
-	rRefresh   RECT
-	rStop      RECT
-	brushWhite uintptr
+	rStart          RECT
+	rFreeze         RECT
+	rResume         RECT
+	rToggle         RECT
+	rRefresh        RECT
+	rStop           RECT
+	brushWhite      uintptr
+	brushCloseHover uintptr
 )
 
 func main() {
@@ -376,6 +418,7 @@ func initUIResources() {
 	brushGreen = makeBrush(55, 210, 122)
 	brushMuted = makeBrush(42, 49, 59)
 	brushWhite = makeBrush(242, 246, 252)
+	brushCloseHover = makeBrush(196, 43, 28)
 	penBorder = makePen(43, 51, 63)
 	penAccent = makePen(55, 145, 255)
 
@@ -413,7 +456,7 @@ func registerClasses() {
 	procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 
 	outClass := utf16Ptr("ProjectorFreezerOutput")
-	blackBrush, _, _ := procCreateSolidBrush.Call(0)
+	blackBrush, _, _ := procGetStockObject.Call(4)
 	wc2 := WNDCLASSEX{
 		CbSize:        uint32(unsafe.Sizeof(WNDCLASSEX{})),
 		LpfnWndProc:   syscall.NewCallback(outputWndProc),
@@ -429,8 +472,8 @@ func registerClasses() {
 
 func createMainWindow() uintptr {
 	style := uintptr(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | 0x00010000 | 0x00040000 | 0x02000000)
-	if p := user32.NewProc("GetDpiForSystem"); p.Find() == nil {
-		if d, _, _ := p.Call(); d > 0 {
+	if procGetDpiForSystem.Find() == nil {
+		if d, _, _ := procGetDpiForSystem.Call(); d > 0 {
 			windowDPI = int32(d)
 		}
 	}
@@ -508,9 +551,9 @@ func mainWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 			return 1
 		}
 	case WM_CREATE:
-		procSetTimer.Call(hwnd, previewTimer, 33, 0)
 		windowDPI = queryWindowDPI(hwnd)
 		buildUI(hwnd)
+		syncPreviewTimer()
 		return 0
 	case WM_SIZE:
 		layoutControls(hwnd)
@@ -547,7 +590,7 @@ func mainWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		for i := 1; i <= 3; i++ {
 			if ptInRect(p, chromeButtonRect(logicalWidth, i)) {
 				chromePressed = i
-				user32.NewProc("SetCapture").Call(hwnd)
+				procSetCapture.Call(hwnd)
 				return 0
 			}
 		}
@@ -556,7 +599,7 @@ func mainWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		if chromePressed > 0 {
 			pressed := chromePressed
 			chromePressed = 0
-			user32.NewProc("ReleaseCapture").Call()
+			procReleaseCapture.Call()
 			if ptInRect(p, chromeButtonRect(logicalWidth, pressed)) {
 				clickChrome(hwnd, p)
 			}
@@ -577,7 +620,7 @@ func mainWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 				id = 32649
 			}
 			cursor, _, _ := procLoadCursorW.Call(0, id)
-			user32.NewProc("SetCursor").Call(cursor)
+			procSetCursor.Call(cursor)
 			return 1
 		}
 	case WM_HOTKEY:
@@ -890,6 +933,7 @@ func startOutput() {
 	procShowWindow.Call(hwndOutput, SW_SHOWNOACTIVATE)
 	resetAudiencePreview()
 	outputRunning = true
+	syncPreviewTimer()
 	blackout, blackAcknowledged, gdiPresented = privacy.enabled && activeSourceWindow.HWND == 0, false, false
 	if privacy.enabled {
 		privacy.latched = true
@@ -993,6 +1037,7 @@ func stopOutput() {
 	clearControlCaptureExclusion()
 	resetAudiencePreview()
 	outputRunning = false
+	syncPreviewTimer()
 	activeSourceWindow = sourceWindow{}
 	layoutControls(hwndMain)
 	blackout, blackAcknowledged, gdiPresented, gdiAwaitLive = false, false, false, false
@@ -1097,7 +1142,7 @@ func paintOutput(hdc uintptr) {
 				mode = 3
 			} // COLORONCOLOR: crisp enlargement
 			procSetStretchBltMode.Call(outputBuffer.dc, mode)
-			gdi32.NewProc("SetBrushOrgEx").Call(outputBuffer.dc, 0, 0, 0)
+			procSetBrushOrgEx.Call(outputBuffer.dc, 0, 0, 0)
 			ok, _, _ = procStretchBlt.Call(outputBuffer.dc, uintptr(dx), uintptr(dy), uintptr(dw), uintptr(dh), frameDC, 0, 0, uintptr(frameW), uintptr(frameH), SRCCOPY)
 		}
 		if ok == 0 {
@@ -1143,7 +1188,7 @@ func releaseFrame() {
 
 func applyHotkeys(showResult bool) {
 	if showResult && recordingEdit != 0 {
-		user32.NewProc("SetFocus").Call(hwndMain)
+		procSetFocus.Call(hwndMain)
 	}
 	registerReleaseCursorHotkey()
 	texts := actionHotkeyTexts()
@@ -1262,7 +1307,7 @@ func cleanup() {
 	procUnregisterHotKey.Call(hwndMain, hotkeyBlack)
 	procUnregisterHotKey.Call(hwndMain, hotkeyStop)
 	if gdipToken != 0 {
-		gdip.NewProc("GdiplusShutdown").Call(gdipToken)
+		procGdiplusShutdown.Call(gdipToken)
 		gdipToken = 0
 	}
 	mainBuffer.release()
@@ -1274,7 +1319,7 @@ func cleanup() {
 	procUnregisterHotKey.Call(hwndMain, HOTKEY_FREEZE)
 	procUnregisterHotKey.Call(hwndMain, HOTKEY_RESUME)
 	stopOutput()
-	for _, obj := range []uintptr{brushBG, brushSidebar, brushCard, brushControl, brushActive, brushAccent, brushGreen, brushMuted, brushWhite, penBorder, penAccent, fontBrand, fontTitle, fontSubtitle, fontRow, fontDesc, fontNav, fontButton, fontSmall, fontIcon, fontNavIcon} {
+	for _, obj := range []uintptr{brushBG, brushSidebar, brushCard, brushControl, brushActive, brushAccent, brushGreen, brushMuted, brushWhite, brushCloseHover, penBorder, penAccent, fontBrand, fontTitle, fontSubtitle, fontRow, fontDesc, fontNav, fontButton, fontSmall, fontIcon, fontNavIcon} {
 		if obj != 0 {
 			procDeleteObject.Call(obj)
 		}

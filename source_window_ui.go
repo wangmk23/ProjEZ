@@ -12,9 +12,15 @@ type sourceWindow struct {
 	Title string
 }
 
-var sourceWindows []sourceWindow
-var activeSourceWindow sourceWindow
-var sourceWindowCombo uintptr
+var (
+	sourceWindows            []sourceWindow
+	activeSourceWindow       sourceWindow
+	sourceWindowCombo        uintptr
+	procGetWindowLongW       = user32.NewProc("GetWindowLongW")
+	procEnumWindows          = user32.NewProc("EnumWindows")
+	procSetPropW             = user32.NewProc("SetPropW")
+	procDwmGetWindowAttr     = dwmapi.NewProc("DwmGetWindowAttribute")
+)
 
 const idSourceWindow = 260
 
@@ -31,32 +37,31 @@ func refreshSourceWindows() {
 	}
 	old := chosenSourceWindow()
 	sourceWindows = nil
-	own, _, _ := kernel32.NewProc("GetCurrentProcessId").Call()
+	own, _, _ := procGetCurrentProcessId.Call()
 	callback := syscall.NewCallback(func(h, l uintptr) uintptr {
-		visible, _, _ := user32.NewProc("IsWindowVisible").Call(h)
+		visible, _, _ := procIsWindowVisible.Call(h)
 		if visible == 0 || windowPID(h) == uint32(own) {
 			return 1
 		}
 		var title [256]uint16
-		user32.NewProc("GetWindowTextW").Call(h, uintptr(unsafe.Pointer(&title[0])), 256)
+		procGetWindowTextW.Call(h, uintptr(unsafe.Pointer(&title[0])), 256)
 		name := syscall.UTF16ToString(title[:])
 		if name == "" {
 			return 1
 		}
-		style, _, _ := user32.NewProc("GetWindowLongW").Call(h, ^uintptr(19)) // GWL_EXSTYLE=-20
+		style, _, _ := procGetWindowLongW.Call(h, ^uintptr(19)) // GWL_EXSTYLE=-20
 		if style&WS_EX_TOOLWINDOW != 0 {
 			return 1
 		}
 		var cloaked uint32
-		procDwmGetWindowAttribute := syscall.NewLazyDLL("dwmapi.dll").NewProc("DwmGetWindowAttribute")
-		procDwmGetWindowAttribute.Call(h, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
+		procDwmGetWindowAttr.Call(h, 14, uintptr(unsafe.Pointer(&cloaked)), 4)
 		if cloaked != 0 {
 			return 1
 		}
 		sourceWindows = append(sourceWindows, sourceWindow{h, windowPID(h), name})
 		return 1
 	})
-	user32.NewProc("EnumWindows").Call(callback, 0)
+	procEnumWindows.Call(callback, 0)
 	procSendMessageW.Call(sourceWindowCombo, CB_RESETCONTENT, 0, 0)
 	procSendMessageW.Call(sourceWindowCombo, CB_ADDSTRING, 0, uintptr(unsafe.Pointer(utf16Ptr("选择要投影的应用窗口"))))
 	selection := 0
@@ -110,7 +115,7 @@ func sourceRouteLabel() string {
 // Opt out of Shell fullscreen heuristics without changing taskbar settings.
 // https://learn.microsoft.com/windows/win32/api/shobjidl_core/nf-shobjidl_core-itaskbarlist2-markfullscreenwindow
 func preserveTaskbarControls(hwnd uintptr) bool {
-	ok, _, _ := user32.NewProc("SetPropW").Call(hwnd, uintptr(unsafe.Pointer(utf16Ptr("NonRudeHWND"))), 1)
+	ok, _, _ := procSetPropW.Call(hwnd, uintptr(unsafe.Pointer(utf16Ptr("NonRudeHWND"))), 1)
 	return ok != 0
 }
 
@@ -119,7 +124,7 @@ func keepControlWindowOnSource() {
 		return
 	}
 	var bounds RECT
-	user32.NewProc("GetWindowRect").Call(hwndMain, uintptr(unsafe.Pointer(&bounds)))
+	procGetWindowRect.Call(hwndMain, uintptr(unsafe.Pointer(&bounds)))
 	r := srcMonitor.Rect
 	if bounds.Left >= r.Left && bounds.Top >= r.Top && bounds.Right <= r.Right && bounds.Bottom <= r.Bottom {
 		return
