@@ -402,6 +402,12 @@ func main() {
 		if int32(r) <= 0 {
 			break
 		}
+		if sceneEditor != 0 {
+			handled, _, _ := user32.NewProc("IsDialogMessageW").Call(sceneEditor, uintptr(unsafe.Pointer(&msg)))
+			if handled != 0 {
+				continue
+			}
+		}
 		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		procDispatchMessageW.Call(uintptr(unsafe.Pointer(&msg)))
 	}
@@ -880,6 +886,11 @@ func startOutput() {
 		messageBox(hwndMain, reason, "请选择观众副屏", MB_ICONWARNING)
 		return
 	}
+	region := regionFor(monitors[si])
+	if !preferences.WindowMode && selectedRegion != (RECT{}) && !validRegion(region) {
+		setStatus("来源屏幕已变化，请重新框选")
+		return
+	}
 	selectedWindow := sourceWindow{}
 	if preferences.WindowMode {
 		selectedWindow = chosenSourceWindow()
@@ -899,9 +910,15 @@ func startOutput() {
 		setStatus("原刷新率未能恢复，请先在 Windows 显示设置中检查")
 		return
 	}
-	if !preferences.WindowMode && !ensureControlCapturePolicy() {
+	if err := prepareActiveScene(monitors[di].Rect.Right-monitors[di].Rect.Left, monitors[di].Rect.Bottom-monitors[di].Rect.Top); err != nil {
+		messageBox(hwndMain, err.Error(), "无法加载演示图层", MB_ICONWARNING)
 		return
 	}
+	if !preferences.WindowMode && !ensureControlCapturePolicy() {
+		releaseActiveScene()
+		return
+	}
+	activeRegion = region
 	activeSourceWindow = selectedWindow
 	srcMonitor = monitors[si]
 	dstMonitor = monitors[di]
@@ -919,6 +936,7 @@ func startOutput() {
 		0, 0, hInstance, 0,
 	)
 	if hwndOutput == 0 {
+		releaseActiveScene()
 		clearControlCaptureExclusion()
 		restoreRefreshRate()
 		messageBox(hwndMain, "无法创建投影输出窗口。", "启动失败", MB_ICONERROR)
@@ -1038,6 +1056,8 @@ func stopOutput() {
 	resetAudiencePreview()
 	outputRunning = false
 	syncPreviewTimer()
+	releaseActiveScene()
+	activeRegion = RECT{}
 	activeSourceWindow = sourceWindow{}
 	layoutControls(hwndMain)
 	blackout, blackAcknowledged, gdiPresented, gdiAwaitLive = false, false, false, false
@@ -1063,8 +1083,11 @@ func captureFrame() {
 	if !outputRunning || hwndOutput == 0 {
 		return
 	}
-	w := srcMonitor.Rect.Right - srcMonitor.Rect.Left
-	h := srcMonitor.Rect.Bottom - srcMonitor.Rect.Top
+	r := srcMonitor.Rect
+	if validRegion(activeRegion) {
+		r = RECT{r.Left + activeRegion.Left, r.Top + activeRegion.Top, r.Left + activeRegion.Right, r.Top + activeRegion.Bottom}
+	}
+	w, h := r.Right-r.Left, r.Bottom-r.Top
 	if w <= 0 || h <= 0 {
 		return
 	}
@@ -1088,7 +1111,7 @@ func captureFrame() {
 	}
 
 	copied, _, _ := procBitBlt.Call(frameDC, 0, 0, uintptr(w), uintptr(h), screenDC,
-		uintptr(int64(srcMonitor.Rect.Left)), uintptr(int64(srcMonitor.Rect.Top)), SRCCOPY)
+		uintptr(int64(r.Left)), uintptr(int64(r.Top)), SRCCOPY)
 	if copied == 0 {
 		return
 	}
@@ -1100,10 +1123,10 @@ func captureFrame() {
 		ci.CbSize = uint32(unsafe.Sizeof(ci))
 		ok, _, _ := procGetCursorInfo.Call(uintptr(unsafe.Pointer(&ci)))
 		if ok != 0 && (ci.Flags&CURSOR_SHOWING) != 0 &&
-			ci.PtScreenPos.X >= srcMonitor.Rect.Left && ci.PtScreenPos.X < srcMonitor.Rect.Right &&
-			ci.PtScreenPos.Y >= srcMonitor.Rect.Top && ci.PtScreenPos.Y < srcMonitor.Rect.Bottom {
-			x := ci.PtScreenPos.X - srcMonitor.Rect.Left
-			y := ci.PtScreenPos.Y - srcMonitor.Rect.Top
+			ci.PtScreenPos.X >= r.Left && ci.PtScreenPos.X < r.Right &&
+			ci.PtScreenPos.Y >= r.Top && ci.PtScreenPos.Y < r.Bottom {
+			x := ci.PtScreenPos.X - r.Left
+			y := ci.PtScreenPos.Y - r.Top
 			procDrawIconEx.Call(frameDC, uintptr(x), uintptr(y), ci.HCursor, 0, 0, 0, 0, DI_NORMAL)
 		}
 	}
@@ -1148,6 +1171,9 @@ func paintOutput(hdc uintptr) {
 		if ok == 0 {
 			return
 		} // Keep the displayed frame on composition failure.
+		if !blendActiveScene(outputBuffer.dc, cw, ch) {
+			return
+		}
 	}
 	if ok, _, _ := procBitBlt.Call(hdc, 0, 0, uintptr(cw), uintptr(ch), outputBuffer.dc, 0, 0, SRCCOPY); ok != 0 {
 		outputBuffer, gdiLastBuffer = gdiLastBuffer, outputBuffer

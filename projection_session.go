@@ -23,6 +23,8 @@ type projectionConfig struct {
 	StartBlack           bool
 	SourceWindow         uintptr
 	SourcePID            uint32
+	Region               RECT
+	Overlay              *sceneRaster
 }
 type projectionCommand struct {
 	Generation, Sequence uint64

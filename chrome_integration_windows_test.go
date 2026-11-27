@@ -36,7 +36,13 @@ func saveChromeWindow(hwnd uintptr, path string) error {
 	defer procDeleteObject.Call(bmp)
 	old, _, _ := procSelectObject.Call(dc, bmp)
 	defer procSelectObject.Call(dc, old)
-	procSendMessageW.Call(hwnd, 0x0317, dc, 4|16|8)
+	if hwnd == sceneEditor {
+		if ok, _, _ := user32.NewProc("PrintWindow").Call(hwnd, dc, 1); ok == 0 {
+			return fmt.Errorf("scene editor print failed")
+		}
+	} else {
+		procSendMessageW.Call(hwnd, 0x0317, dc, 4|16|8)
+	}
 	gdi32.NewProc("GdiFlush").Call()
 	raw := unsafe.Slice((*byte)(bits), int(r.Right*r.Bottom*4))
 	im := image.NewRGBA(image.Rect(0, 0, int(r.Right), int(r.Bottom)))
@@ -462,6 +468,23 @@ func TestChromeRenderHelper(t *testing.T) {
 			t.Fatal("old preview remained visible after black command")
 		}
 	}()
+
+	if dir := os.Getenv("PROJEZ_SCREENSHOTS"); dir != "" {
+		openSceneEditor()
+		if sceneEditor == 0 {
+			t.Fatal("scene editor did not open")
+		}
+		procSendMessageW.Call(sceneEditor, WM_COMMAND, sceneAddText, 0)
+		setText(sceneEditorFields[0], "会议演示")
+		procSendMessageW.Call(sceneEditor, WM_COMMAND, sceneSave, 0)
+		if len(sceneLayers) != 1 || sceneLayers[0].Text != "会议演示" || sceneEditorPreview == nil {
+			t.Fatal("native editor did not save and preview text")
+		}
+		if e := saveChromeWindow(sceneEditor, filepath.Join(dir, "scene-editor.png")); e != nil {
+			t.Fatal(e)
+		}
+		procDestroyWindow.Call(sceneEditor)
+	}
 
 }
 

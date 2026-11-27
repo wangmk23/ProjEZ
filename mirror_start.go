@@ -37,6 +37,7 @@ func startPrimaryMirror() {
 		return
 	}
 	preferences.WindowMode = false
+	selectedRegion = RECT{}
 	preferences.Fill = false // Preserve the complete image without stretching.
 	preferences.FreeCursor = false
 	showCursor = true

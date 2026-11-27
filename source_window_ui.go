@@ -13,13 +13,13 @@ type sourceWindow struct {
 }
 
 var (
-	sourceWindows            []sourceWindow
-	activeSourceWindow       sourceWindow
-	sourceWindowCombo        uintptr
-	procGetWindowLongW       = user32.NewProc("GetWindowLongW")
-	procEnumWindows          = user32.NewProc("EnumWindows")
-	procSetPropW             = user32.NewProc("SetPropW")
-	procDwmGetWindowAttr     = dwmapi.NewProc("DwmGetWindowAttribute")
+	sourceWindows        []sourceWindow
+	activeSourceWindow   sourceWindow
+	sourceWindowCombo    uintptr
+	procGetWindowLongW   = user32.NewProc("GetWindowLongW")
+	procEnumWindows      = user32.NewProc("EnumWindows")
+	procSetPropW         = user32.NewProc("SetPropW")
+	procDwmGetWindowAttr = dwmapi.NewProc("DwmGetWindowAttribute")
 )
 
 const idSourceWindow = 260
@@ -96,11 +96,29 @@ func sourceReady() bool {
 	if outputPairError(monitors[a], monitors[b]) != "" {
 		return false
 	}
-	return !preferences.WindowMode || chosenSourceWindow().HWND != 0
+	return (!preferences.WindowMode || chosenSourceWindow().HWND != 0) && (selectedRegion == (RECT{}) || validRegion(regionFor(monitors[a])))
 }
 func drawSourceModes(dc uintptr) {
-	uiButton(dc, RECT{264, 116, 408, 150}, "屏幕复制", !preferences.WindowMode, !outputRunning, func() { preferences.WindowMode = false; saveConfig(); layoutControls(hwndMain) })
-	uiButton(dc, RECT{420, 116, 564, 150}, "应用窗口", preferences.WindowMode, !outputRunning, func() { preferences.WindowMode = true; refreshSourceWindows(); saveConfig(); layoutControls(hwndMain) })
+	width := min32(144, (logicalWidth+contentShift()-312)/4)
+	button := func(i int, label string, selected bool, run func()) {
+		x := 264 + int32(i)*(width+8)
+		uiButton(dc, RECT{x, 116, x + width, 150}, label, selected, !outputRunning, run)
+	}
+	button(0, "屏幕复制", !preferences.WindowMode && selectedRegion == (RECT{}), func() {
+		preferences.WindowMode = false
+		selectedRegion = RECT{}
+		saveConfig()
+		layoutControls(hwndMain)
+	})
+	button(1, "应用窗口", preferences.WindowMode, func() {
+		preferences.WindowMode = true
+		selectedRegion = RECT{}
+		refreshSourceWindows()
+		saveConfig()
+		layoutControls(hwndMain)
+	})
+	button(2, "框选画面", selectedRegion != (RECT{}), pickProjectionSource)
+	button(3, "图文图层", false, openSceneEditor)
 }
 func sourceRouteLabel() string {
 	if activeSourceWindow.HWND != 0 && outputRunning {
@@ -108,6 +126,9 @@ func sourceRouteLabel() string {
 	}
 	if preferences.WindowMode {
 		return "应用窗口 → 观众屏幕"
+	}
+	if validRegion(selectedRegion) {
+		return fmt.Sprintf("选区 %d × %d → 观众屏幕", selectedRegion.Right-selectedRegion.Left, selectedRegion.Bottom-selectedRegion.Top)
 	}
 	return previewRoute()
 }

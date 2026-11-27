@@ -1,4 +1,4 @@
-﻿param([ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.7.12')
+﻿param([ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.8.0')
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $outputRoot = Join-Path $projectRoot 'dist'
@@ -31,6 +31,7 @@ Windows 10 1903+ / Windows 11 x64 便携版。解压后运行 ProjEZ.exe。
 1. 连接投影仪，Windows 选择“扩展”，将操作屏设为主屏。
 2. 在程序中选择来源和观众屏幕，或选择应用窗口，再开始投影。
 3. 冻结后主屏可以继续操作；需要隐藏内容时使用黑屏。
+4. 在投影控制中可以框选画面，或通过图文图层添加标题、字幕、图片及标志。
 
 冻结 Ctrl+Alt+F8；恢复 Ctrl+Alt+F9；黑屏 Ctrl+Alt+F10；停止 Ctrl+Alt+F12。
 前四项可在快捷键页面直接按组合键录制并保存。Ctrl+Alt+F11 释放鼠标限制。

@@ -85,3 +85,9 @@ float4 PS(Vertex v) : SV_TARGET {
  }
  return bg;
 }
+
+
+// A premultiplied overlay is drawn over the entire audience canvas.
+float4 OverlayPS(Vertex v) : SV_TARGET {
+ return desktop.Sample(sampleMode,v.uv);
+}

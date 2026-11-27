@@ -20,6 +20,8 @@ const (
 	idQuality
 )
 
+const appVersion = "v0.8.0"
+
 type Preferences struct {
 	FPS            int
 	Fill           bool
@@ -46,7 +48,7 @@ var pageNames = []string{"首页", "投影控制", "快捷键", "显示设置", 
 var pageDescriptions = []string{"", "", "", "", "", "", ""}
 var pageKeywords = []string{
 	"首页 常规 连接 状态 检测 扩展 帮助 使用 指引",
-	"投影 镜像 来源 目标 冻结 恢复 停止 屏幕 显示器",
+	"投影 镜像 来源 目标 冻结 恢复 停止 屏幕 显示器 框选 区域 图文 图层 字体 图片",
 	"快捷键 热键 按键 冲突 F8 F9",
 	"显示 比例 缩放 铺满 帧率 刷新 鼠标 光标 FPS 清晰 平滑 画质 分辨率",
 	"外观 主题 强调色 颜色 透明 深色 关闭 托盘 退出",
@@ -672,7 +674,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 	procFillRect.Call(hdc, uintptr(unsafe.Pointer(&RECT{0, titleHeight, 220 - shift, h})), brushSidebar)
 	drawChrome(hdc, w)
 	if shift == 0 {
-		textLine(hdc, "v0.7.12", RECT{24, h - 40, 212, h - 12}, fontSmall, true)
+		textLine(hdc, appVersion, RECT{24, h - 40, 212, h - 12}, fontSmall, true)
 	}
 	icons := []string{"\uE80F", "\uE7F4", "\uE765", "\uE7F8", "\uE790", "\uE713", "\uE946"}
 	for i, name := range pageNames {
@@ -789,7 +791,7 @@ func drawMainUI(hdc uintptr, client RECT) {
 		uiToggle(hdc, RECT{right - 76, 353, right - 28, 379}, preferences.Compatibility, func() { preferences.Compatibility = !preferences.Compatibility; saveConfig() })
 		drawPrivacyControls(hdc, right)
 	case 6:
-		settingCard(hdc, right, 158, "ProjEZ", "v0.7.12", false)
+		settingCard(hdc, right, 158, "ProjEZ", appVersion, false)
 		textLine(hdc, "Windows 投影控制", RECT{264, 250, right - 20, 282}, fontDesc, true)
 		textLine(hdc, "窗口投影、冻结画面与临时黑屏", RECT{264, 286, right - 20, 318}, fontDesc, true)
 		uiButton(hdc, RECT{264, 350, 410, 388}, "使用说明", false, true, showUsageGuide)

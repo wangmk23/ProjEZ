@@ -15,6 +15,9 @@ var vertexShader []byte
 //go:embed assets/projection_ps.cso
 var pixelShader []byte
 
+//go:embed assets/overlay_ps.cso
+var overlayShader []byte
+
 type swapDesc1 struct{ Width, Height, Format, Stereo, SampleCount, SampleQuality, Usage, Count, Scaling, Effect, Alpha, Flags uint32 }
 type samplerDesc struct {
 	Filter, U, V, W        uint32
@@ -32,6 +35,7 @@ type mappedTexture struct {
 }
 type gpuRenderer struct {
 	preview                                                                                *gpuPreview
+	overlayView, overlayTexture, overlayPS, overlayBlend                                   comPtr
 	capture                                                                                *desktopDuplication
 	cfg                                                                                    projectionConfig
 	swap, back, composite, compositeView, last, desktop, desktopView, pointer, pointerView comPtr
@@ -122,6 +126,9 @@ func newGPURenderer(hwnd uintptr, capture *desktopDuplication, cfg projectionCon
 		return
 	}
 	r.pointerView, err = makeView(device, r.pointer, 7)
+	if err == nil && cfg.Overlay != nil {
+		err = r.initGPUOverlay(cfg.Overlay)
+	}
 	return
 }
 func (r *gpuRenderer) ensureDesktop(w, h uint32) error {
@@ -144,6 +151,19 @@ func (r *gpuRenderer) ensureDesktop(w, h uint32) error {
 	return nil
 }
 func (r *gpuRenderer) copyFrame(f desktopFrame) error {
+	if crop := r.cfg.Region; validRegion(crop) {
+		b := rotatedRegion(crop, f.Width, f.Height, r.capture.output.Rotation)
+		if b.Left < 0 || b.Top < 0 || b.Right > int32(f.Width) || b.Bottom > int32(f.Height) || !validRegion(b) {
+			return fmt.Errorf("选区已超出来源，请重新框选")
+		}
+		if err := r.ensureDesktop(uint32(b.Right-b.Left), uint32(b.Bottom-b.Top)); err != nil {
+			return err
+		}
+		box := [6]uint32{uint32(b.Left), uint32(b.Top), 0, uint32(b.Right), uint32(b.Bottom), 1}
+		comCall(r.capture.context, 46, uintptr(unsafe.Pointer(r.desktop)), 0, 0, 0, 0, uintptr(unsafe.Pointer(f.Texture)), 0, uintptr(unsafe.Pointer(&box)))
+		r.valid = true
+		return nil
+	}
 	if err := r.ensureDesktop(f.Width, f.Height); err != nil {
 		return err
 	}
@@ -173,6 +193,9 @@ func (r *gpuRenderer) render() error {
 	comCall(ctx, 33, 1, uintptr(unsafe.Pointer(&r.compositeView)), 0)
 	sw := r.cfg.Source.Rect.Right - r.cfg.Source.Rect.Left
 	sh := r.cfg.Source.Rect.Bottom - r.cfg.Source.Rect.Top
+	if crop := r.cfg.Region; validRegion(crop) {
+		sw, sh = crop.Right-crop.Left, crop.Bottom-crop.Top
+	}
 	dw, dh := outputSize(sw, sh, int32(r.width), int32(r.height), r.cfg.Fill)
 	vp := viewport{X: float32((int32(r.width) - dw) / 2), Y: float32((int32(r.height) - dh) / 2), W: float32(dw), H: float32(dh), Max: 1}
 	comCall(ctx, 44, 1, uintptr(unsafe.Pointer(&vp)))
@@ -187,7 +210,12 @@ func (r *gpuRenderer) render() error {
 	if r.cfg.Smooth && r.data.Options[3] == 0 && !usePointSampling(sw, sh, dw, dh, true) {
 		r.data.Options[2] = 0.2
 	}
-	comCall(ctx, 48, uintptr(unsafe.Pointer(r.constants)), 0, 0, uintptr(unsafe.Pointer(&r.data)), 0, 0)
+	data := r.data
+	if crop := r.cfg.Region; validRegion(crop) {
+		data.Cursor[0] -= float32(crop.Left)
+		data.Cursor[1] -= float32(crop.Top)
+	}
+	comCall(ctx, 48, uintptr(unsafe.Pointer(r.constants)), 0, 0, uintptr(unsafe.Pointer(&data)), 0, 0)
 	comCall(ctx, 16, 0, 1, uintptr(unsafe.Pointer(&r.constants)))
 	views := [2]comPtr{r.desktopView, r.pointerView}
 	comCall(ctx, 8, 0, 2, uintptr(unsafe.Pointer(&views[0])))
@@ -201,6 +229,7 @@ func (r *gpuRenderer) render() error {
 	comCall(ctx, 11, uintptr(unsafe.Pointer(r.vs)), 0, 0)
 	comCall(ctx, 9, uintptr(unsafe.Pointer(r.ps)), 0, 0)
 	comCall(ctx, 13, 3, 0)
+	r.drawGPUOverlay()
 	var nulls [2]comPtr
 	comCall(ctx, 8, 0, 2, uintptr(unsafe.Pointer(&nulls[0])))
 	comCall(ctx, 33, 0, 0, 0)
@@ -296,7 +325,7 @@ func (r *gpuRenderer) close() {
 	if r.capture != nil && r.capture.context != nil {
 		comCall(r.capture.context, 110)
 	}
-	for _, p := range []*comPtr{&r.pointerView, &r.pointer, &r.desktopView, &r.desktop, &r.compositeView, &r.composite, &r.last, &r.back, &r.constants, &r.point, &r.linear, &r.vs, &r.ps, &r.swap} {
+	for _, p := range []*comPtr{&r.overlayView, &r.overlayTexture, &r.overlayPS, &r.overlayBlend, &r.pointerView, &r.pointer, &r.desktopView, &r.desktop, &r.compositeView, &r.composite, &r.last, &r.back, &r.constants, &r.point, &r.linear, &r.vs, &r.ps, &r.swap} {
 		releaseCOM(p)
 	}
 }

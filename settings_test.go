@@ -97,7 +97,11 @@ func TestReadmeVersionConsistency(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	if !strings.Contains(text, "0.7.12") || strings.Contains(text, "ProjEZ-0.7.9.exe") {
-		t.Fatal("README.md version header or executable name is inconsistent with 0.7.12")
+	version := strings.TrimPrefix(appVersion, "v")
+	if !strings.Contains(text, version) {
+		t.Fatalf("README.md does not document %s", appVersion)
+	}
+	if strings.HasPrefix(text, "# ProjEZ ") && (!strings.HasPrefix(text, "# ProjEZ "+version+"\n") && !strings.HasPrefix(text, "# ProjEZ "+version+"\r\n") || !strings.Contains(text, "ProjEZ-"+version+".exe")) {
+		t.Fatalf("README.md version header or executable name is inconsistent with %s", appVersion)
 	}
 }
