@@ -16,6 +16,10 @@ func (r *gpuRenderer) presentBlack() (bool, error) {
 		}
 	}
 	comCall(r.capture.context, 47, uintptr(unsafe.Pointer(r.last)), uintptr(unsafe.Pointer(r.composite)))
+	if r.clockLastBase != nil {
+		r.saveClockPatch(r.clockLastBase, r.last)
+		r.presentedClockLabel = ""
+	}
 	r.lastValid = true
 	return true, nil
 }

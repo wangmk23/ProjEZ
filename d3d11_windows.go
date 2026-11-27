@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 	"runtime"
+	"time"
 	"unsafe"
 )
 
@@ -34,6 +35,10 @@ type mappedTexture struct {
 	RowPitch, DepthPitch uint32
 }
 type gpuRenderer struct {
+	clockView, clockTexture, clockBase, clockLastBase comPtr
+	clockPixels                                       []byte
+	clockLabel, presentedClockLabel                   string
+
 	preview                                                                                *gpuPreview
 	overlayView, overlayTexture, overlayPS, overlayBlend                                   comPtr
 	capture                                                                                *desktopDuplication
@@ -126,7 +131,7 @@ func newGPURenderer(hwnd uintptr, capture *desktopDuplication, cfg projectionCon
 		return
 	}
 	r.pointerView, err = makeView(device, r.pointer, 7)
-	if err == nil && cfg.Overlay != nil {
+	if err == nil && (cfg.Overlay != nil || cfg.Clock != nil) {
 		err = r.initGPUOverlay(cfg.Overlay)
 	}
 	return
@@ -229,7 +234,16 @@ func (r *gpuRenderer) render() error {
 	comCall(ctx, 11, uintptr(unsafe.Pointer(r.vs)), 0, 0)
 	comCall(ctx, 9, uintptr(unsafe.Pointer(r.ps)), 0, 0)
 	comCall(ctx, 13, 3, 0)
-	r.drawGPUOverlay()
+	r.drawOverlayTexture(r.overlayView, viewport{W: float32(r.width), H: float32(r.height), Max: 1})
+	if r.cfg.Clock != nil {
+		if err := r.refreshGPUClock(time.Now()); err != nil {
+			return err
+		}
+		comCall(ctx, 33, 0, 0, 0)
+		r.saveClockPatch(r.clockBase, r.composite)
+		comCall(ctx, 33, 1, uintptr(unsafe.Pointer(&r.compositeView)), 0)
+		r.drawGPUClock()
+	}
 	var nulls [2]comPtr
 	comCall(ctx, 8, 0, 2, uintptr(unsafe.Pointer(&nulls[0])))
 	comCall(ctx, 33, 0, 0, 0)
@@ -239,6 +253,14 @@ func (r *gpuRenderer) present() (bool, error) {
 	if err := r.render(); err != nil {
 		return false, err
 	}
+	ok, err := r.presentComposite()
+	if ok && r.clockBase != nil {
+		r.clockLastBase, r.clockBase = r.clockBase, r.clockLastBase
+		r.presentedClockLabel = r.clockLabel
+	}
+	return ok, err
+}
+func (r *gpuRenderer) presentComposite() (bool, error) {
 	if r.swap != nil {
 		comCall(r.capture.context, 47, uintptr(unsafe.Pointer(r.back)), uintptr(unsafe.Pointer(r.composite)))
 		// Nonblocking presentation: no driver queue accumulation; commands remain serviceable.
@@ -282,7 +304,12 @@ func (r *gpuRenderer) freeze() error {
 	if !r.lastValid {
 		return fmt.Errorf("尚无可冻结画面")
 	}
-	p, err := r.readTexture(r.last, r.width, r.height)
+	base := r.last
+	if r.clockLastBase != nil {
+		r.restoreFrozenBase()
+		base = r.composite
+	}
+	p, err := r.readTexture(base, r.width, r.height)
 	if err != nil {
 		return err
 	}
@@ -294,6 +321,9 @@ func (r *gpuRenderer) freeze() error {
 func (r *gpuRenderer) presentFrozen() (bool, error) {
 	if !r.lastValid {
 		return false, fmt.Errorf("冻结画面不可用")
+	}
+	if now := time.Now(); r.cfg.Clock != nil && clockText(now) != r.presentedClockLabel {
+		return r.renderFrozenClock(now)
 	}
 	if r.swap == nil {
 		return true, nil
@@ -310,6 +340,10 @@ func (r *gpuRenderer) restoreSnapshot(p []byte, w, h uint32) error {
 		return fmt.Errorf("显示尺寸改变，停止输出以保护冻结内容")
 	}
 	comCall(r.capture.context, 48, uintptr(unsafe.Pointer(r.last)), 0, 0, uintptr(unsafe.Pointer(&p[0])), uintptr(w*4), 0)
+	if r.clockLastBase != nil {
+		r.saveClockPatch(r.clockLastBase, r.last)
+	}
+	r.presentedClockLabel = ""
 	runtime.KeepAlive(p)
 	r.lastValid = true
 	r.snapshot = p
@@ -325,7 +359,7 @@ func (r *gpuRenderer) close() {
 	if r.capture != nil && r.capture.context != nil {
 		comCall(r.capture.context, 110)
 	}
-	for _, p := range []*comPtr{&r.overlayView, &r.overlayTexture, &r.overlayPS, &r.overlayBlend, &r.pointerView, &r.pointer, &r.desktopView, &r.desktop, &r.compositeView, &r.composite, &r.last, &r.back, &r.constants, &r.point, &r.linear, &r.vs, &r.ps, &r.swap} {
+	for _, p := range []*comPtr{&r.clockView, &r.clockTexture, &r.clockBase, &r.clockLastBase, &r.overlayView, &r.overlayTexture, &r.overlayPS, &r.overlayBlend, &r.pointerView, &r.pointer, &r.desktopView, &r.desktop, &r.compositeView, &r.composite, &r.last, &r.back, &r.constants, &r.point, &r.linear, &r.vs, &r.ps, &r.swap} {
 		releaseCOM(p)
 	}
 }

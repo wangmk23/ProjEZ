@@ -534,6 +534,7 @@ func mainWndProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		}
 		if wParam == previewTimer {
 			finishTrayRestore()
+			tickFrozenGDIClock()
 			maintainCursorControl()
 			pollAudiencePreview()
 			return 0
@@ -911,6 +912,7 @@ func startOutput() {
 		return
 	}
 	if err := prepareActiveScene(monitors[di].Rect.Right-monitors[di].Rect.Left, monitors[di].Rect.Bottom-monitors[di].Rect.Top); err != nil {
+		releaseActiveScene()
 		messageBox(hwndMain, err.Error(), "无法加载演示图层", MB_ICONWARNING)
 		return
 	}
@@ -1140,6 +1142,11 @@ func paintOutput(hdc uintptr) {
 	procGetClientRect.Call(hwndOutput, uintptr(unsafe.Pointer(&rc)))
 	cw := rc.Right - rc.Left
 	ch := rc.Bottom - rc.Top
+	if frozen && !blackout && activeSceneClock != nil && clockBaseBuffer.dc != 0 && clockText(time.Now()) != gdiClockPresented {
+		if paintFrozenGDIClock(hdc, cw, ch) {
+			return
+		}
+	}
 	if (frozen || !gdiSourceValid) && !blackout && gdiPresented && gdiLastBuffer.dc != 0 {
 		procBitBlt.Call(hdc, 0, 0, uintptr(cw), uintptr(ch), gdiLastBuffer.dc, 0, 0, SRCCOPY)
 		return
@@ -1174,10 +1181,27 @@ func paintOutput(hdc uintptr) {
 		if !blendActiveScene(outputBuffer.dc, cw, ch) {
 			return
 		}
+		if activeSceneClock != nil {
+			b := activeSceneClock.bounds
+			if !clockPendingBuffer.ensure(hdc, b.Right-b.Left, b.Bottom-b.Top) {
+				return
+			}
+			copied, _, _ := procBitBlt.Call(clockPendingBuffer.dc, 0, 0, uintptr(b.Right-b.Left), uintptr(b.Bottom-b.Top), outputBuffer.dc, uintptr(b.Left), uintptr(b.Top), SRCCOPY)
+			if copied == 0 {
+				return
+			}
+			if blendGDIClock(outputBuffer.dc, time.Now()) != nil {
+				return
+			}
+		}
 	}
 	if ok, _, _ := procBitBlt.Call(hdc, 0, 0, uintptr(cw), uintptr(ch), outputBuffer.dc, 0, 0, SRCCOPY); ok != 0 {
 		outputBuffer, gdiLastBuffer = gdiLastBuffer, outputBuffer
 		gdiPresented = true
+		if activeSceneClock != nil && !blackout && gdiSourceValid {
+			clockBaseBuffer, clockPendingBuffer = clockPendingBuffer, clockBaseBuffer
+			gdiClockPresented = gdiClockText
+		}
 		if blackout && !blackAcknowledged {
 			blackAcknowledged = true
 			setStatus("已黑屏：恢复需手动确认")

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -18,6 +19,8 @@ const maxSceneLayers = 16
 
 type sceneLayer struct {
 	Text, File, Font, Color   string
+	Clock                     bool
+	Style                     string
 	Size, X, Y, W, H, Opacity int
 	Bold, Italic              bool
 }
@@ -89,7 +92,7 @@ func layerColor(text string) (uint32, error) {
 	return uint32(n), err
 }
 func validateLayer(l sceneLayer) error {
-	if l.Text == "" && l.File == "" {
+	if l.Text == "" && l.File == "" && !l.Clock {
 		return fmt.Errorf("请输入文字或选择图片")
 	}
 	if len(l.Text) > 2048 || len(l.Font) > 120 || len(l.File) > 4096 {
@@ -137,6 +140,9 @@ func blendScenePixel(dst []byte, r, g, b, a uint32) {
 	dst[3] = byte(a + (uint32(dst[3])*inverse+127)/255)
 }
 func paintSceneText(canvas *sceneRaster, l sceneLayer, rect RECT) error {
+	return paintSceneTextSized(canvas, l, rect, canvas.H)
+}
+func paintSceneTextSized(canvas *sceneRaster, l sceneLayer, rect RECT, referenceHeight int32) error {
 	w, h := rect.Right-rect.Left, rect.Bottom-rect.Top
 	dc, bmp, old, mask, err := createSceneDIB(w, h)
 	if err != nil {
@@ -151,7 +157,10 @@ func paintSceneText(canvas *sceneRaster, l sceneLayer, rect RECT) error {
 	if l.Italic {
 		italic = 1
 	}
-	size := max(1, int32(l.Size)*canvas.H/720)
+	size := max(1, int32(l.Size)*referenceHeight/720)
+	if l.Clock {
+		size = max(1, min(size, w/6, h*2/3))
+	}
 	font, _, _ := gdi32.NewProc("CreateFontW").Call(uintptr(int64(-size)), 0, 0, 0, weight, italic, 0, 0, 1, 0, 0, 4, 0, uintptr(unsafe.Pointer(utf16Ptr(l.Font))))
 	if font == 0 {
 		return fmt.Errorf("无法创建字体")
@@ -162,7 +171,23 @@ func paintSceneText(canvas *sceneRaster, l sceneLayer, rect RECT) error {
 	black, _, _ := procGetStockObject.Call(4)
 	local := RECT{0, 0, w, h}
 	procFillRect.Call(dc, uintptr(unsafe.Pointer(&local)), black)
-	drawText(dc, l.Text, local, font, 0xffffff, 0x10|DT_NOPREFIX)
+	textRect := local
+	if l.Style == "label" {
+		pad := min(size/3, min(w/5, h/5))
+		textRect = RECT{pad, pad, w - pad, h - pad}
+		for y := rect.Top; y < rect.Bottom; y++ {
+			for x := rect.Left; x < rect.Right; x++ {
+				off := (y*canvas.W + x) * 4
+				a := uint32(l.Opacity) * 180 / 100
+				blendScenePixel(canvas.Pixels[off:off+4], a/12, a/12, a/12, a)
+			}
+		}
+	}
+	flags := uintptr(0x10 | DT_NOPREFIX)
+	if l.Clock {
+		flags = DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX
+	}
+	drawText(dc, l.Text, textRect, font, 0xffffff, flags)
 	gdi32.NewProc("GdiFlush").Call()
 	color, _ := layerColor(l.Color)
 	red, green, blue := color>>16, (color>>8)&255, color&255
@@ -204,15 +229,11 @@ func loadSceneImage(path string) (image.Image, error) {
 	img, _, err := image.Decode(f)
 	return img, err
 }
-func paintSceneImage(canvas *sceneRaster, l sceneLayer, fill RECT) error {
-	img, err := loadSceneImage(l.File)
-	if err != nil {
-		return err
-	}
+func paintSceneImage(canvas *sceneRaster, l sceneLayer, fill RECT, img image.Image) {
 	b := img.Bounds()
 	w, h := fitRect(int32(b.Dx()), int32(b.Dy()), fill.Right-fill.Left, fill.Bottom-fill.Top)
 	if w <= 0 || h <= 0 {
-		return nil
+		return
 	}
 	x0, y0 := fill.Left+(fill.Right-fill.Left-w)/2, fill.Top+(fill.Bottom-fill.Top-h)/2
 	opacity := uint32(l.Opacity)
@@ -223,9 +244,11 @@ func paintSceneImage(canvas *sceneRaster, l sceneLayer, fill RECT) error {
 			blendScenePixel(canvas.Pixels[off:off+4], (r>>8)*opacity/100, (g>>8)*opacity/100, (blue>>8)*opacity/100, (a>>8)*opacity/100)
 		}
 	}
-	return nil
 }
 func rasterScene(layers []sceneLayer, w, h int32) (*sceneRaster, error) {
+	return rasterSceneAt(layers, w, h, time.Now(), nil)
+}
+func rasterSceneAt(layers []sceneLayer, w, h int32, now time.Time, images map[string]image.Image) (*sceneRaster, error) {
 	if len(layers) == 0 {
 		return nil, nil
 	}
@@ -236,7 +259,16 @@ func rasterScene(layers []sceneLayer, w, h int32) (*sceneRaster, error) {
 		w, h = fitRect(w, h, 1920, 1080)
 	}
 	canvas := &sceneRaster{w, h, make([]byte, int(w*h*4))}
-	for i, l := range layers {
+	// The clock sits above other layers.
+	ordered := append([]sceneLayer(nil), layers...)
+	for i, l := range ordered {
+		if l.Clock {
+			copy(ordered[i:], ordered[i+1:])
+			ordered[len(ordered)-1] = l
+			break
+		}
+	}
+	for i, l := range ordered {
 		if err := validateLayer(l); err != nil {
 			return nil, fmt.Errorf("第 %d 层：%w", i+1, err)
 		}
@@ -249,8 +281,17 @@ func rasterScene(layers []sceneLayer, w, h int32) (*sceneRaster, error) {
 		}
 		var err error
 		if l.File != "" {
-			err = paintSceneImage(canvas, l, r)
+			img := images[l.File]
+			if img == nil {
+				img, err = loadSceneImage(l.File)
+			}
+			if err == nil {
+				paintSceneImage(canvas, l, r, img)
+			}
 		} else {
+			if l.Clock {
+				l.Text = clockText(now)
+			}
 			err = paintSceneText(canvas, l, r)
 		}
 		if err != nil {
@@ -260,6 +301,8 @@ func rasterScene(layers []sceneLayer, w, h int32) (*sceneRaster, error) {
 	return canvas, nil
 }
 func releaseActiveScene() {
+	releaseGDIClock()
+	activeSceneClock = nil
 	releaseSceneDIB(sceneDC, sceneBitmap, sceneOld)
 	sceneDC, sceneBitmap, sceneOld, activeScene = 0, 0, 0, nil
 }
@@ -268,7 +311,20 @@ func prepareActiveScene(width, height int32) error {
 	if sceneLoadError != nil {
 		return fmt.Errorf("无法读取图层配置：%w", sceneLoadError)
 	}
-	raster, err := rasterScene(sceneLayers, width, height)
+	layers := make([]sceneLayer, 0, len(sceneLayers))
+	for _, l := range sceneLayers {
+		if l.Clock {
+			if err := validateLayer(l); err != nil {
+				return err
+			}
+			if l.Opacity > 0 {
+				activeSceneClock = newOutputClock(l, width, height)
+			}
+		} else {
+			layers = append(layers, l)
+		}
+	}
+	raster, err := rasterScene(layers, width, height)
 	if err != nil || raster == nil {
 		return err
 	}

@@ -14,7 +14,7 @@ func currentGPUConfig() projectionConfig {
 	if source := monitorRates[srcMonitor.Device]; source.known && source.current > 0 && (fps <= 0 || source.current < fps) {
 		fps = source.current
 	}
-	return projectionConfig{Generation: gpuController.generation, HWND: hwndOutput, Source: srcMonitor, Target: dstMonitor, TargetFPS: fps, Fill: preferences.Fill, Smooth: preferences.Smooth, Cursor: showCursor, StartBlack: blackout, SourceWindow: activeSourceWindow.HWND, SourcePID: activeSourceWindow.PID, Region: activeRegion, Overlay: activeScene}
+	return projectionConfig{Generation: gpuController.generation, HWND: hwndOutput, Source: srcMonitor, Target: dstMonitor, TargetFPS: fps, Fill: preferences.Fill, Smooth: preferences.Smooth, Cursor: showCursor, StartBlack: blackout, SourceWindow: activeSourceWindow.HWND, SourcePID: activeSourceWindow.PID, Region: activeRegion, Overlay: activeScene, Clock: activeSceneClock}
 }
 func beginProjectionBackend() {
 	gpuFallbackReason = ""

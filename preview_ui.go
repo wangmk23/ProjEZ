@@ -41,6 +41,20 @@ func previewTop() int32 {
 	}
 	return 404
 }
+func audiencePreviewWidth(right int32) int32 {
+	width := int32(400)
+	if preferences.PreviewSize == 1 {
+		width = 288
+	}
+	if preferences.PreviewSize == 2 {
+		width = 640
+	}
+	return max(1, min(width, right-284))
+}
+func audiencePreviewHeight() int32 {
+	return audiencePreviewWidth(logicalWidth-28+contentShift()) * 9 / 16
+}
+func audiencePreviewBottom() int32 { return previewTop() + 36 + audiencePreviewHeight() }
 func previewVisible() bool {
 	if !previewWanted || !outputRunning || (currentPage != 0 && currentPage != 1) {
 		return false
@@ -52,7 +66,7 @@ func previewVisible() bool {
 		return false
 	}
 	top := previewTop() - pageScroll
-	return top+268 > 58 && top < footerTop()-8
+	return audiencePreviewBottom()-pageScroll > 58 && top < footerTop()-8
 }
 func confirmedOutputState() projectionState {
 	if gpuOwnsOutput {
@@ -109,7 +123,7 @@ func pollAudiencePreview() {
 		if top < 58 {
 			top = 58
 		}
-		bottom := previewTop() + 280 - pageScroll
+		bottom := audiencePreviewBottom() - pageScroll
 		if bottom > footerTop()-8 {
 			bottom = footerTop() - 8
 		}
@@ -227,7 +241,7 @@ func drawAudiencePreview(dc uintptr, right, top int32) {
 		audienceError = ""
 		pollAudiencePreview()
 	})
-	w := min32(400, right-284)
+	w := audiencePreviewWidth(right)
 	h := w * 9 / 16
 	r := RECT{264, top + 36, 264 + w, top + 36 + h}
 	black, _, _ := procGetStockObject.Call(4)
@@ -276,9 +290,10 @@ func drawHome(dc uintptr, right int32) {
 	textLine(dc, key, RECT{264, 191, right - 20, 215}, fontSmall, true)
 	drawAudiencePreview(dc, right, 236)
 	_, target := mirrorPair(monitors, selectedDevice(cbOutput))
-	uiButton(dc, RECT{264, 540, 444, 582}, "复制主屏", true, target >= 0 && !outputRunning && gpuActive == nil, startPrimaryMirror)
-	uiButton(dc, RECT{456, 540, 636, 582}, "投影设置", false, true, func() { selectPage(1) })
-	textLine(dc, "实时同步主屏；冻结后，本机可继续操作", RECT{264, 590, right - 20, 618}, fontSmall, true)
+	y := audiencePreviewBottom() + 43
+	uiButton(dc, RECT{264, y, 444, y + 42}, "复制主屏", true, target >= 0 && !outputRunning && gpuActive == nil, startPrimaryMirror)
+	uiButton(dc, RECT{456, y, 636, y + 42}, "投影设置", false, true, func() { selectPage(1) })
+	textLine(dc, "实时同步主屏；冻结后，本机可继续操作", RECT{264, y + 50, right - 20, y + 78}, fontSmall, true)
 }
 func showUsageGuide() {
 	messageBox(hwndMain, "连接投影仪，按 Win+P 选择扩展。\n首页点击“复制主屏”，完整同步主屏画面。\n也可在投影控制中单独选择应用窗口。\n\n冻结：保留当前画面。黑屏：临时隐藏内容。\n恢复：继续投影。停止：关闭输出窗口，露出副屏桌面。\n\n窗口投影时可以操作其他软件；选定窗口最小化或关闭后会黑屏。", "使用说明", MB_ICONINFORMATION)

@@ -6,7 +6,7 @@
   <p>
     <img alt="Windows 10 1903+ / 11" src="https://img.shields.io/badge/Windows-10%201903%2B%20%7C%2011-0078D4?style=flat-square">
     <img alt="x64" src="https://img.shields.io/badge/architecture-x64-475569?style=flat-square">
-    <img alt="Version 0.7.8 (Pre-release 0.8.0)" src="https://img.shields.io/badge/version-0.7.8%20(pre%200.8.0)-2563EB?style=flat-square">
+    <img alt="Version 0.7.8 (Pre-release 0.8.1)" src="https://img.shields.io/badge/version-0.7.8%20(pre%200.8.1)-2563EB?style=flat-square">
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-16A34A?style=flat-square"></a>
   </p>
   <p><a href="https://github.com/wangmk23/ProjEZ/releases">下载</a> · <a href="#开始使用">开始使用</a> · <a href="docs/BUILD.md">构建</a> · <a href="docs/FAQ.md">常见问题</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="README.en.md">English</a></p>
@@ -41,10 +41,11 @@
 
 **冻结**保留观众当前画面；**黑屏**临时隐藏内容。**停止**会关闭输出窗口，副屏返回 Windows 桌面。
 
-## 演示画面（0.8.0 测试版）
+## 演示画面（0.8.1 测试版）
 
 - 点击“框选画面”后，可点击窗口、拖动选择屏幕区域，或按 Enter 选择整屏。
-- 在“图文图层”中添加文字和 PNG/JPEG 图片，编辑字体、样式、颜色、尺寸、透明度和图层顺序。
+- 在“图文图层”中添加文字、PNG/JPEG 图片和当前时间，在大画布上拖放与缩放，直接选择字体、样式和颜色。
+- 时钟显示本机当前时间，冻结时继续走。图层编辑器可以调整窗口大小，显示设置可选择投影预览大小。
 - 开始前可预览并保存图层。观众预览显示合成后的画面，冻结保留图层，黑屏遮住所有内容。
 
 <img src="docs/images/scene-editor.png" width="670" alt="演示图层编辑器">

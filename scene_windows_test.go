@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"syscall"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -121,5 +122,108 @@ func TestSceneGPUComposesCroppedPixels(t *testing.T) {
 	got, err = r.readTexture(r.last, 16, 32)
 	if err != nil || !bytes.Equal(got[:4], []byte{0, 0, 0, 255}) {
 		t.Fatal("black retained overlay", err)
+	}
+}
+
+func TestFrozenClockUpdatesOnlyItsOverlay(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	var device, ctx comPtr
+	hr, _, _ := syscall.NewLazyDLL("d3d11.dll").NewProc("D3D11CreateDevice").Call(0, 5, 0, 0x20, 0, 0, 7, uintptr(unsafe.Pointer(&device)), 0, uintptr(unsafe.Pointer(&ctx)))
+	if err := hrError("D3D11 WARP", hr); err != nil {
+		t.Fatal(err)
+	}
+	d := &desktopDuplication{device: device, context: ctx, output: gpuOutput{Rotation: 1}}
+	defer d.close()
+	const w, h = 320, 180
+	l := defaultLayer()
+	l.Clock = true
+	l.Font = "Consolas"
+	l.Size = 96
+	l.X, l.Y, l.W, l.H = 5, 5, 75, 28
+	clock := newOutputClock(l, w, h)
+	r, err := newGPURenderer(0, d, projectionConfig{Source: Monitor{Rect: RECT{0, 0, w, h}}, Target: Monitor{Rect: RECT{0, 0, w, h}}, Clock: clock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.close()
+	original := bytes.Repeat([]byte{80, 50, 20, 255}, w*h)
+	if err := r.uploadDesktop(original, w, h); err != nil {
+		t.Fatal(err)
+	}
+	if shown, err := r.present(); !shown || err != nil {
+		t.Fatal(shown, err)
+	}
+	if err := r.freeze(); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(r.snapshot, original) {
+		t.Fatal("clock leaked into frozen base")
+	}
+	// Simulate another source frame arriving while frozen. Only the stored base may be shown.
+	if err := r.uploadDesktop(bytes.Repeat([]byte{31, 61, 91, 255}, w*h), w, h); err != nil {
+		t.Fatal(err)
+	}
+	read := func(at time.Time) []byte {
+		t.Helper()
+		if shown, err := r.renderFrozenClock(at); !shown || err != nil {
+			t.Fatal(shown, err)
+		}
+		got, err := r.readTexture(r.last, w, h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got[len(got)-4:], original[len(original)-4:]) {
+			t.Fatal("frozen base was replaced")
+		}
+		return got
+	}
+	now := time.Date(2026, 11, 27, 12, 34, 56, 0, time.Local)
+	first, second := read(now), read(now.Add(time.Second))
+	if bytes.Equal(first, second) || bytes.Equal(second, original) {
+		t.Fatal("frozen clock did not change")
+	}
+	if shown, err := r.presentBlack(); !shown || err != nil {
+		t.Fatal(shown, err)
+	}
+	black, err := r.readTexture(r.last, w, h)
+	if err != nil || !bytes.Equal(black, bytes.Repeat([]byte{0, 0, 0, 255}, w*h)) {
+		t.Fatal("clock still visible on black output", err)
+	}
+}
+func TestClockGDIFrozenBase(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	oldClock := activeSceneClock
+	defer func() { releaseGDIClock(); activeSceneClock = oldClock }()
+	l := defaultLayer()
+	l.Clock = true
+	l.Font = "Consolas"
+	l.Size = 96
+	l.X, l.Y, l.W, l.H = 0, 0, 75, 25
+	activeSceneClock = newOutputClock(l, 320, 180)
+	dc, bmp, old, pixels, err := createSceneDIB(320, 180)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseSceneDIB(dc, bmp, old)
+	initial := bytes.Repeat([]byte{10, 20, 30, 255}, 320*180)
+	copy(pixels, initial)
+	at := time.Date(2026, 11, 27, 8, 0, 0, 0, time.Local)
+	if err := blendGDIClock(dc, at); err != nil {
+		t.Fatal(err)
+	}
+	gdi32.NewProc("GdiFlush").Call()
+	first := append([]byte(nil), pixels...)
+	copy(pixels, initial)
+	if err := blendGDIClock(dc, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	gdi32.NewProc("GdiFlush").Call()
+	if bytes.Equal(first, pixels) || bytes.Equal(pixels, initial) {
+		t.Fatal("GDI clock did not change")
+	}
+	if !bytes.Equal(pixels[len(pixels)-4:], initial[len(initial)-4:]) {
+		t.Fatal("unrelated pixels changed")
 	}
 }

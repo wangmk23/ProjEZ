@@ -25,6 +25,7 @@ type projectionConfig struct {
 	SourcePID            uint32
 	Region               RECT
 	Overlay              *sceneRaster
+	Clock                *outputClock
 }
 type projectionCommand struct {
 	Generation, Sequence uint64

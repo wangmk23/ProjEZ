@@ -42,4 +42,4 @@ pwsh -File scripts/build.ps1
 
 See [BUILD.md](docs/BUILD.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CHANGELOG.md](CHANGELOG.md). MIT licensed.
 
-In the 0.8.0 preview, use the projection picker to click a window, drag a screen region, or select the entire screen. The layer editor adds PNG/JPEG images and styled text. Edit sources and layers before starting projection.
+In the 0.8.1 preview, use the projection picker to click a window, drag a screen region, or select the entire screen. Drag and resize text, PNG/JPEG images, and a live clock directly on the layer canvas. The clock continues while projection is frozen. Edit sources and layers before starting projection.

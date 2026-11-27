@@ -475,9 +475,29 @@ func TestChromeRenderHelper(t *testing.T) {
 			t.Fatal("scene editor did not open")
 		}
 		procSendMessageW.Call(sceneEditor, WM_COMMAND, sceneAddText, 0)
-		setText(sceneEditorFields[0], "会议演示")
+		setText(editorControls[sceneText], "会议演示")
+		// Send real editor mouse messages to move the selected layer.
+		b := layerCanvasBounds(editorLayers[0], editorCanvas)
+		x, y := b.Left+15, b.Top+10
+		pack := func(x, y int32) uintptr { return uintptr(uint16(x)) | uintptr(uint16(y))<<16 }
+		procSendMessageW.Call(sceneEditor, 0x0201, 1, pack(x, y))
+		procSendMessageW.Call(sceneEditor, 0x0200, 1, pack(x+40, y+24))
+		procSendMessageW.Call(sceneEditor, WM_LBUTTONUP, 0, pack(x+40, y+24))
+		if editorLayers[0].X <= 5 || editorLayers[0].Y <= 5 {
+			t.Fatal("could not drag text on canvas")
+		}
+		b = layerCanvasBounds(editorLayers[0], editorCanvas)
+		x, y = b.Right-2, b.Bottom-2
+		procSendMessageW.Call(sceneEditor, 0x0201, 1, pack(x, y))
+		procSendMessageW.Call(sceneEditor, WM_LBUTTONUP, 0, pack(x+40, y+16))
+		if editorLayers[0].W <= 45 || editorLayers[0].H <= 18 {
+			t.Fatal("could not resize text on canvas")
+		}
+		procSendMessageW.Call(sceneEditor, WM_COMMAND, sceneAddClock, 0)
+
 		procSendMessageW.Call(sceneEditor, WM_COMMAND, sceneSave, 0)
-		if len(sceneLayers) != 1 || sceneLayers[0].Text != "会议演示" || sceneEditorPreview == nil {
+		renderSceneEditorPreview()
+		if len(sceneLayers) != 2 || sceneLayers[0].Text != "会议演示" || !sceneLayers[1].Clock || sceneEditorPreview == nil {
 			t.Fatal("native editor did not save and preview text")
 		}
 		if e := saveChromeWindow(sceneEditor, filepath.Join(dir, "scene-editor.png")); e != nil {

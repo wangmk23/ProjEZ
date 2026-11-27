@@ -301,7 +301,7 @@ func (s *gpuSession) run() {
 				dirty = true
 				lastFrame = time.Now()
 			}
-			if err == nil && dirty && r.valid {
+			if err == nil && r.valid && (dirty || cfg.Clock != nil && clockText(time.Now()) != r.presentedClockLabel) {
 				var ok bool
 				ok, err = r.present()
 				if ok {

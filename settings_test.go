@@ -10,7 +10,7 @@ import (
 )
 
 func TestPreferencePersistence(t *testing.T) {
-	want := Preferences{FPS: 30, Fill: true, Transparent: true, Accent: 2, Smooth: true, WindowMode: true, LightTheme: true, FreeCursor: true}
+	want := Preferences{PreviewSize: 2, FPS: 30, Fill: true, Transparent: true, Accent: 2, Smooth: true, WindowMode: true, LightTheme: true, FreeCursor: true}
 	if got := parsePreferences(strings.Join(preferenceLines(want), "\r\n")); got != want {
 		t.Fatalf("saved settings changed on reload: got %+v want %+v", got, want)
 	}

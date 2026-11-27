@@ -20,7 +20,7 @@ const (
 	idQuality
 )
 
-const appVersion = "v0.8.0"
+const appVersion = "v0.8.1"
 
 type Preferences struct {
 	FPS            int
@@ -30,6 +30,7 @@ type Preferences struct {
 	Smooth         bool
 	Compatibility  bool
 	PreviewEconomy bool
+	PreviewSize    int
 	WindowMode     bool
 	FreeCursor     bool
 	LightTheme     bool
@@ -50,7 +51,7 @@ var pageKeywords = []string{
 	"首页 常规 连接 状态 检测 扩展 帮助 使用 指引",
 	"投影 镜像 来源 目标 冻结 恢复 停止 屏幕 显示器 框选 区域 图文 图层 字体 图片",
 	"快捷键 热键 按键 冲突 F8 F9",
-	"显示 比例 缩放 铺满 帧率 刷新 鼠标 光标 FPS 清晰 平滑 画质 分辨率",
+	"显示 比例 缩放 铺满 帧率 刷新 鼠标 光标 FPS 清晰 平滑 画质 分辨率 预览 大小",
 	"外观 主题 强调色 颜色 透明 深色 关闭 托盘 退出",
 	"高级 配置 目录 默认 重置 设置文件 隐私 保护 黑屏 演示窗口",
 	"关于 版本 说明 操作 帮助",
@@ -201,6 +202,10 @@ func parsePreferences(text string) Preferences {
 			p.WindowMode = strings.EqualFold(v, "true")
 		case "freecursor":
 			p.FreeCursor = strings.EqualFold(v, "true")
+		case "previewsize":
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 2 {
+				p.PreviewSize = n
+			}
 		case "previeweconomy":
 			p.PreviewEconomy = strings.EqualFold(v, "true")
 		case "backend":
@@ -238,7 +243,7 @@ func preferenceLines(p Preferences) []string {
 	if p.Compatibility {
 		backend = "gdi"
 	}
-	return []string{fmt.Sprintf("CloseToTray=%t", p.CloseToTray), fmt.Sprintf("LightTheme=%t", p.LightTheme), fmt.Sprintf("WindowMode=%t", p.WindowMode), fmt.Sprintf("FreeCursor=%t", p.FreeCursor), fmt.Sprintf("PreviewEconomy=%t", p.PreviewEconomy), "Backend=" + backend, "RefreshPolicy=2", fmt.Sprintf("FPS=%d", p.FPS), fmt.Sprintf("Fill=%t", p.Fill), fmt.Sprintf("Transparent=%t", p.Transparent), fmt.Sprintf("Accent=%d", p.Accent), fmt.Sprintf("Smooth=%t", p.Smooth)}
+	return []string{fmt.Sprintf("CloseToTray=%t", p.CloseToTray), fmt.Sprintf("LightTheme=%t", p.LightTheme), fmt.Sprintf("WindowMode=%t", p.WindowMode), fmt.Sprintf("FreeCursor=%t", p.FreeCursor), fmt.Sprintf("PreviewEconomy=%t", p.PreviewEconomy), fmt.Sprintf("PreviewSize=%d", p.PreviewSize), "Backend=" + backend, "RefreshPolicy=2", fmt.Sprintf("FPS=%d", p.FPS), fmt.Sprintf("Fill=%t", p.Fill), fmt.Sprintf("Transparent=%t", p.Transparent), fmt.Sprintf("Accent=%d", p.Accent), fmt.Sprintf("Smooth=%t", p.Smooth)}
 }
 
 func outputSize(sw, sh, dw, dh int32, fill bool) (int32, int32) {
@@ -767,6 +772,16 @@ func drawMainUI(hdc uintptr, client RECT) {
 		uiToggle(hdc, RECT{right - 76, 486, right - 28, 512}, showCursor, func() { showCursor = !showCursor; updateGPUSettings(); saveConfig() })
 		textLine(hdc, projectionBackendSummary(), RECT{264, 526, right - 20, 553}, fontDesc, true)
 		textLine(hdc, projectionScaleSummary(), RECT{264, 562, right - 20, 590}, fontDesc, true)
+		settingCard(hdc, right, 604, "投影预览大小", "", true)
+		for i, label := range []string{"小", "标准", "大"} {
+			mode := []int{1, 0, 2}[i]
+			left := right - 248 + int32(i)*76
+			uiButton(hdc, RECT{left, 623, left + 68, 657}, label, preferences.PreviewSize == mode, true, func() {
+				preferences.PreviewSize = mode
+				saveConfig()
+				layoutControls(hwndMain)
+			})
+		}
 	case 4:
 		settingCard(hdc, right, 158, "界面主题", "", true)
 		uiButton(hdc, RECT{right - 254, 178, right - 144, 212}, "深色", !preferences.LightTheme, true, func() { setLightTheme(false) })

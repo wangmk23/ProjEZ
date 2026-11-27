@@ -55,10 +55,13 @@ func maxPageScroll() int32 {
 		bottom = 668
 	}
 	if currentPage == 0 {
-		bottom = 654
+		bottom = audiencePreviewBottom() + 130
 	}
 	if currentPage == 1 {
-		bottom = 704
+		bottom = audiencePreviewBottom() + 31
+	}
+	if currentPage == 3 {
+		bottom = 686
 	}
 	n := bottom - (footerTop() - 8)
 	if n < 0 {
